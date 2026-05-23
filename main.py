@@ -44,29 +44,29 @@ def print_decision(own: Vessel, targets: list[Vessel], env: Environment, wind_di
 def run_predefined_scenarios():
     print("Запуск предустановленных навигационных сценариев...\n")
     
-    # Сценарий 1: Сложный случай, 2 опасные цели одновременно
-    print("Сценарий 1: многоцелевой конфликт, пересечение и встречное судно")
-    print("  - Наше судно идет курсом 0°")
-    print("  - Цель A: справа, пересекает курс слева направо")
-    print("  - Цель B: встречная, идет прямо на нас")
+    # Сценарий 1: сложный случай, 2 опасные цели одновременно
+    print("Сценарий 1: многоцелевой конфликт, пересечение и встречное судно:")
+    print("  - наше судно идет курсом 0°;")
+    print("  - цель A: справа, пересекает курс слева направо;")
+    print("  - цель B: встречная, идет прямо на нас.")
     own = Vessel("OwnShip", 0, 0, 0, 12, VesselType.POWER_DRIVEN, min_turning_radius=0.25)
     target_a = Vessel("TargetA", 1.2, 1.2, 270, 10, VesselType.POWER_DRIVEN)
     target_b = Vessel("TargetB", 0.0, 2.5, 180, 10, VesselType.POWER_DRIVEN)
     env = Environment(visibility=Visibility.GOOD)
     print_decision(own, [target_a, target_b], env)
     
-    # Сценарий 2: Физическое ограничение маневра
-    print("Сценарий 2: ограничение маневренности")
-    print("  - Встречное судно появилось прямо по курсу очень близко")
-    print("  - Из-за высокой скорости и большого радиуса циркуляции мы физически не успеем развернуться")
+    # Сценарий 2: физическое ограничение маневра
+    print("Сценарий 2: ограничение маневренности:")
+    print("  - встречное судно появилось прямо по курсу очень близко;")
+    print("  - из-за высокой скорости и большого радиуса циркуляции мы физически не успеем развернуться.")
     own_heavy = Vessel("OwnShip_heavy", 0, 0, 0, 20, VesselType.POWER_DRIVEN, min_turning_radius=0.8)
     target_close = Vessel("TargetShip_close", 0.0, 0.3, 180, 10, VesselType.POWER_DRIVEN)
     print_decision(own_heavy, [target_close], env)
 
-    # Сценарий 3: Разные приоритеты судов
-    print("Сценарий 3: расхождение с парусным судном и рыболовным судном")
-    print("  - Мы - моторное судно. Слева идет парусное судно, справа - рыболовное.")
-    print("  - Мы уступаем обоим.")
+    # Сценарий 3: разные приоритеты судов
+    print("Сценарий 3: расхождение с парусным судном и рыболовным судном:")
+    print("  - мы - моторное судно, слева идет парусное судно, справа - рыболовное;")
+    print("  - мы уступаем обоим.")
     own_power = Vessel("OwnShip_power", 0, 0, 0, 12, VesselType.POWER_DRIVEN)
     target_sail = Vessel("TargetSail", -1.0, 1.0, 90, 6, VesselType.SAILING)
     target_fish = Vessel("TargetFish", 1.0, 1.0, 270, 6, VesselType.FISHING)
