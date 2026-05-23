@@ -1,9 +1,12 @@
 from typing import List, Optional, Tuple
 
-from .geometry import (calculate_distance, calculate_relative_bearing,
-                       calculate_true_bearing, is_collision_risk_exists)
-from .models import (Action, Environment, Vessel, VesselRole, VesselType,
-                     Visibility)
+from .geometry import (
+    calculate_distance,
+    calculate_relative_bearing,
+    calculate_true_bearing,
+    is_collision_risk_exists,
+)
+from .models import Action, Environment, Vessel, VesselRole, VesselType, Visibility
 
 
 def get_vessel_priority_rank(v_type: VesselType) -> int:
