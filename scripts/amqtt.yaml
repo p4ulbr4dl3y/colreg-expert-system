@@ -1,5 +1,8 @@
 listeners:
   default:
     bind: 0.0.0.0:1883
+  ws:
+    bind: 0.0.0.0:9001
+    type: ws
 auth:
   allow_anonymous: true
