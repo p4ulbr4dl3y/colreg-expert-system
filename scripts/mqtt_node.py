@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 
 import paho.mqtt.client as mqtt
 
-# Добавляем корневой каталог в пути импорта для загрузки src
+# добавляем корневой каталог в пути импорта для загрузки src
 sys.path.append(".")
 
 from src.models import Vessel, VesselType, Visibility, Environment, Action, VesselRole
@@ -33,11 +33,11 @@ class ExpertNode:
 
     def _on_connect(self, client, userdata, flags, reason_code, properties):
         if reason_code == 0:
-            logger.info(f"Успешное подключение к MQTT брокеру на {MQTT_BROKER}:{MQTT_PORT}")
+            logger.info(f"Успешное подключение к MQTT-брокеру на {MQTT_BROKER}:{MQTT_PORT}")
             client.subscribe(MQTT_TOPIC_COMMAND)
             logger.info(f"Подписка на топик оформлена: {MQTT_TOPIC_COMMAND}")
         else:
-            logger.error(f"Не удалось подключиться к MQTT брокеру. Код ошибки: {reason_code}")
+            logger.error(f"Не удалось подключиться к MQTT-брокеру. Код ошибки: {reason_code}")
 
     def _on_message(self, client, userdata, msg):
         try:
@@ -73,22 +73,22 @@ class ExpertNode:
     def _handle_evaluate_command(self, payload: Dict[str, Any]) -> None:
         request_id = payload.get("request_id", "unknown")
         
-        # Парсим собственное судно
+        # парсим собственное судно
         own_data = payload.get("own_ship")
         if not own_data:
-            self._publish_error(request_id, "Отсутствует 'own_ship' в полезной нагрузке.")
+            self._publish_error(request_id, "отсутствует own_ship в полезной нагрузке.")
             return
             
         try:
             own = self._parse_vessel(own_data)
             
-            # Парсим список целей
+            # парсим список целей
             targets: List[Vessel] = []
             targets_data = payload.get("targets", [])
             for tgt_data in targets_data:
                 targets.append(self._parse_vessel(tgt_data))
                 
-            # Парсим окружающую среду
+            # парсим окружающую среду
             env_data = payload.get("environment", {})
             vis_str = env_data.get("visibility", "GOOD")
             try:
@@ -106,10 +106,10 @@ class ExpertNode:
             if wind_direction is not None:
                 wind_direction = float(wind_direction)
                 
-            # Выполняем оценку
+            # выполняем оценку
             decision = self.engine.evaluate(own, targets, env, wind_direction=wind_direction)
             
-            # Формируем ответ
+            # формируем ответ
             target_decisions_serializable = {}
             for name, tgt_dec in decision.target_decisions.items():
                 target_decisions_serializable[name] = {
@@ -153,14 +153,14 @@ class ExpertNode:
 
     def start(self):
         try:
-            logger.info("Подключение к MQTT брокеру...")
+            logger.info("Подключение к MQTT-брокеру...")
             self.client.connect(MQTT_BROKER, MQTT_PORT, 60)
             self.client.loop_forever()
         except KeyboardInterrupt:
-            logger.info("Отключение от MQTT брокера...")
+            logger.info("Отключение от MQTT-брокера...")
             self.client.disconnect()
         except Exception as e:
-            logger.error(f"Не удалось запустить экспертный MQTT узел: {e}")
+            logger.error(f"Не удалось запустить экспертный MQTT-узел: {e}")
 
 if __name__ == "__main__":
     node = ExpertNode()

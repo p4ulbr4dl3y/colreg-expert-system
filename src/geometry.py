@@ -3,15 +3,15 @@ from typing import Tuple, Optional, List
 from .models import Vessel
 
 # Константы для расчетов опасности
-SAFE_CPA_DISTANCE = 2.0     # Безопасная дистанция кратчайшего сближения (в милях, NM)
-CRITICAL_TCPA = 0.5          # Критическое время сближения (30 минут, в часах)
+SAFE_CPA_DISTANCE = 2.0     # безопасная дистанция кратчайшего сближения (в милях)
+CRITICAL_TCPA = 0.5          # критическое время сближения (в часах)
 
 def course_to_rad(course_deg: float) -> float:
-    """Перевод морского курса (0 - 360, по часовой стрелке от Севера) в радианы."""
+    """Перевод морского курса (от 0 до 360, по часовой стрелке от Севера) в радианы."""
     return math.radians(course_deg)
 
 def rad_to_course(rad: float) -> float:
-    """Перевод радианов в морской курс (0 - 360)."""
+    """Перевод радианов в морской курс (от 0 до 360)."""
     deg = math.degrees(rad)
     return deg % 360
 
@@ -27,7 +27,7 @@ def calculate_distance(v1: Vessel, v2: Vessel) -> float:
     return math.sqrt((v2.x - v1.x)**2 + (v2.y - v1.y)**2)
 
 def calculate_true_bearing(from_vessel: Vessel, to_vessel: Vessel) -> float:
-    """Вычисляет истинный пеленг (True Bearing) на цель в градусах."""
+    """Вычисляет истинный пеленг на цель в градусах."""
     dx = to_vessel.x - from_vessel.x
     dy = to_vessel.y - from_vessel.y
     rad = math.atan2(dx, dy)
@@ -35,8 +35,8 @@ def calculate_true_bearing(from_vessel: Vessel, to_vessel: Vessel) -> float:
 
 def calculate_relative_bearing(own: Vessel, target: Vessel) -> float:
     """
-    Вычисляет относительный (курсовой) пеленг (Relative Bearing) на цель.
-    Угол от носа Own Ship до Target Ship по часовой стрелке (0...360).
+    Вычисляет относительный курсовой пеленг на цель.
+    Угол от носа собственного судна до судна-цели по часовой стрелке (0...360).
     """
     tb = calculate_true_bearing(own, target)
     rb = (tb - own.course) % 360
@@ -44,7 +44,7 @@ def calculate_relative_bearing(own: Vessel, target: Vessel) -> float:
 
 def calculate_cpa_tcpa(own: Vessel, target: Vessel) -> Tuple[float, float]:
     """
-    Вычисляет CPA (дистанцию кратчайшего сближения) и TCPA (время до кратчайшего сближения в часах).
+    Вычисляет дистанцию кратчайшего сближения и время до кратчайшего сближения (в часах).
     """
     v_own_x, v_own_y = get_velocity_components(own.speed, own.course)
     v_tgt_x, v_tgt_y = get_velocity_components(target.speed, target.course)
@@ -90,7 +90,7 @@ def is_collision_risk_exists(own: Vessel, target: Vessel) -> Tuple[bool, float, 
 def is_turn_possible(own_speed: float, min_turning_radius: float, delta_heading_deg: float, tcpa_hours: float) -> bool:
     """
     Проверяет, успеет ли судно физически завершить поворот на delta_heading_deg
-    до наступления момента кратчайшего сближения (TCPA).
+    до наступления момента кратчайшего сближения.
     
     Длина дуги поворота S = R * alpha (в радианах).
     Время поворота T = S / V.
@@ -99,7 +99,7 @@ def is_turn_possible(own_speed: float, min_turning_radius: float, delta_heading_
         return True
         
     alpha_rad = math.radians(abs(delta_heading_deg))
-    turn_distance = min_turning_radius * alpha_rad  # в милях (NM)
+    turn_distance = min_turning_radius * alpha_rad  # в милях
     
     if own_speed < 0.1:
         return True  # Стоим на месте
@@ -111,7 +111,7 @@ def get_forbidden_headings_for_target(own: Vessel, target: Vessel, safe_dist: fl
     """
     Оценивает все 360 направлений курса собственного судна (при текущей скорости).
     Возвращает список из 360 булевых значений, где True означает, что данный курс
-    является ОПАСНЫМ (приводит к CPA < safe_dist при TCPA > 0 и TCPA < CRITICAL_TCPA).
+    является опасным.
     """
     forbidden = [False] * 360
     

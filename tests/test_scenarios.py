@@ -121,7 +121,7 @@ class TestCOLREGScenarios(unittest.TestCase):
         # Из-за инерции маневр физически невозможен в срок
         self.assertFalse(decision.maneuver_possible)
         # Проверяем, что в объяснении есть предупреждение
-        warning_found = any("[ФИЗИЧЕСКОЕ ОГРАНИЧЕНИЕ]" in line for line in decision.explanation)
+        warning_found = any("физическое ограничение:" in line for line in decision.explanation)
         self.assertTrue(warning_found)
 
 if __name__ == "__main__":

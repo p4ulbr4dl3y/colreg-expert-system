@@ -45,7 +45,8 @@ class COLREGInferenceEngine:
         closest_target_name = ""
         
         # Общая сводка
-        general_explanation = ["СТАТУС ОКРУЖАЮЩЕЙ ОБСТАНОВКИ:"]
+        general_explanation = ["статус окружающей обстановки:"]
+        targets_statuses = []
         
         for tgt in targets:
             risk_exists, dist, cpa, tcpa = is_collision_risk_exists(own, tgt)
@@ -55,10 +56,10 @@ class COLREGInferenceEngine:
             tb_own = calculate_true_bearing(own, tgt)
             rb_tgt = calculate_relative_bearing(tgt, own)
             
-            tgt_geo_desc = (
-                f"Цель {tgt.name}: Дистанция {dist:.2f} миль | CPA {cpa:.2f} миль | "
-                f"TCPA {tcpa*60:.1f} мин | Пеленг {rb_own:.1f}°"
-            )
+            rb_own_side = "правый борт" if rb_own < 180 else "левый борт"
+            status_desc = f"цель {tgt.name}, дистанция {dist:.2f} миль, кратчайшее сближение {cpa:.2f} миль, относительный пеленг {rb_own:.1f}° ({rb_own_side})"
+            if tcpa != float('inf') and tcpa > 0:
+                status_desc += f", время сближения {tcpa*60:.1f} минут"
             
             if not risk_exists:
                 # Цель безопасна
@@ -72,10 +73,9 @@ class COLREGInferenceEngine:
                     tcpa=tcpa,
                     explanation=[f"Сближение с {tgt.name} безопасно."]
                 )
-                general_explanation.append(f"  [Безопасно] {tgt_geo_desc}")
+                targets_statuses.append(f"безопасное сближение: {status_desc}")
                 
-                # Даже для безопасных целей рассчитываем их "опасный сектор", чтобы случайно не повернуть в них
-                # Но не накладываем обязательство маневра из-за этой цели.
+                # Рассчитываем и объединяем опасные курсы для этой цели
                 tgt_forbidden = get_forbidden_headings_for_target(own, tgt)
                 for h in range(360):
                     unified_forbidden_headings[h] = unified_forbidden_headings[h] or tgt_forbidden[h]
@@ -87,35 +87,35 @@ class COLREGInferenceEngine:
                 closest_tcpa = tcpa
                 closest_target_name = tgt.name
                 
-            general_explanation.append(f"  [ОПАСНОСТЬ] {tgt_geo_desc}")
+            targets_statuses.append(f"опасное сближение: {status_desc}")
             
             # Применяем правила МППСС-72 по отдельности к данной цели
-            tgt_expl = [f"Оценка расхождения с судно-целью {tgt.name}:"]
+            tgt_expl = [f"оценка расхождения с судно-целью {tgt.name}:"]
             
             # Ограниченная видимость (Правило 19)
             if env.visibility == Visibility.RESTRICTED:
                 is_ahead_of_beam = (rb_own <= 90 or rb_own >= 270)
                 is_we_overtaking = (112.5 <= rb_tgt <= 247.5)
                 
-                tgt_expl.append("  Применяется Правило 19 (Ограниченная видимость). Приоритеты типов судов не действуют.")
+                tgt_expl.append("  применяется Правило 19 для ограниченной видимости: приоритеты типов судов не действуют;")
                 
                 if is_ahead_of_beam:
                     if not is_we_overtaking:
-                        tgt_expl.append("  Цель впереди траверза и не обгоняется. Избегать изменения курса влево (Правило 19 (d)(i)).")
+                        tgt_expl.append("  цель впереди траверза и не обгоняется: следует избегать изменения курса влево согласно Правилу 19 (d)(i);")
                         role = VesselRole.BOTH_GIVE_WAY
                         action = Action.ALTER_COURSE_STARBOARD
                     else:
-                        tgt_expl.append("  Мы обгоняем цель в тумане. Обязаны уступить дорогу.")
+                        tgt_expl.append("  наше судно обгоняет цель в условиях ограниченной видимости: обязаны уступить дорогу;")
                         role = VesselRole.GIVE_WAY
                         action = Action.ALTER_COURSE_STARBOARD
                 else:
                     is_target_starboard = (90 < rb_own <= 180)
                     if is_target_starboard:
-                        tgt_expl.append("  Цель на траверзе или позади него справа. Избегать изменения курса вправо (в сторону судна, Правило 19 (d)(ii)).")
+                        tgt_expl.append("  цель на траверзе или позади него справа: следует избегать изменения курса вправо в сторону судна согласно Правилу 19 (d)(ii);")
                         role = VesselRole.BOTH_GIVE_WAY
                         action = Action.ALTER_COURSE_PORT
                     else:
-                        tgt_expl.append("  Цель на траверзе или позади него слева. Избегать изменения курса влево (в сторону судна, Правило 19 (d)(ii)).")
+                        tgt_expl.append("  цель на траверзе или позади него слева: следует избегать изменения курса влево в сторону судна согласно Правилу 19 (d)(ii);")
                         role = VesselRole.BOTH_GIVE_WAY
                         action = Action.ALTER_COURSE_STARBOARD
             
@@ -123,62 +123,70 @@ class COLREGInferenceEngine:
             else:
                 encounter_sector, is_head_on, is_crossing, is_overtaking = classify_encounter_sectors(own, tgt)
                 
-                # Шаг 2.2.1: Обгон (Правило 13)
+                # Обгон (Правило 13)
                 if is_overtaking:
                     if encounter_sector == "own_overtaking":
-                        tgt_expl.append("  Ситуация ОБГОНА (Правило 13). Мы обгоняем цель. Обязаны держаться в стороне от её пути.")
+                        tgt_expl.append("  ситуация обгона согласно Правилу 13: наше судно обгоняет цель и обязано держаться в стороне от ее пути;")
                         role = VesselRole.GIVE_WAY
                         action = Action.ALTER_COURSE_STARBOARD
                     else:
-                        tgt_expl.append("  Ситуация ОБГОНА (Правило 13). Цель обгоняет нас. Мы должны сохранять курс и скорость.")
+                        tgt_expl.append("  ситуация обгона согласно Правилу 13: цель обгоняет наше судно, мы должны сохранять курс и скорость;")
                         role = VesselRole.STAND_ON
                         action = Action.KEEP_COURSE_SPEED
                 
-                # Шаг 2.2.2: Парусные суда (Правило 12)
+                # Парусные суда (Правило 12)
                 elif own.vessel_type == VesselType.SAILING and tgt.vessel_type == VesselType.SAILING:
                     role, action, rule12_expl = evaluate_sailing_vessels_rule12(own, tgt, wind_direction or 0.0)
-                    tgt_expl.extend(rule12_expl)
+                    # Приводим строки правила 12 к строчным буквам и добавляем точку с запятой
+                    for line in rule12_expl:
+                        cleaned_line = line.strip()
+                        if cleaned_line.startswith("-"):
+                            cleaned_line = cleaned_line[1:].strip()
+                        # Делаем первую букву строчной
+                        if cleaned_line:
+                            cleaned_line = cleaned_line[0].lower() + cleaned_line[1:]
+                        tgt_expl.append(f"  {cleaned_line};")
                 
-                # Шаг 2.2.3: Взаимные обязанности (Правило 18)
+                # Взаимные обязанности (Правило 18)
                 else:
                     own_rank = get_vessel_priority_rank(own.vessel_type)
                     tgt_rank = get_vessel_priority_rank(tgt.vessel_type)
                     
                     if own_rank != tgt_rank:
-                        tgt_expl.append(f"  Взаимные обязанности (Правило 18): {own.vessel_type.description_ru()} vs {tgt.vessel_type.description_ru()}")
+                        tgt_expl.append(f"  взаимные обязанности согласно Правилу 18: наше судно - {own.vessel_type.description_ru()}, цель - {tgt.vessel_type.description_ru()};")
                         if own_rank < tgt_rank:
-                            tgt_expl.append("  Мы обязаны уступить дорогу более приоритетному судну.")
+                            tgt_expl.append("  наше судно имеет меньший приоритет и обязано уступить дорогу;")
                             role = VesselRole.GIVE_WAY
                             action = Action.ALTER_COURSE_STARBOARD
                         else:
-                            tgt_expl.append("  Цель имеет меньший приоритет и обязана уступить дорогу. Мы сохраняем курс и скорость.")
+                            tgt_expl.append("  цель имеет меньший приоритет и обязана уступить дорогу, мы сохраняем курс и скорость;")
                             role = VesselRole.STAND_ON
                             action = Action.KEEP_COURSE_SPEED
                     
                     # Равный приоритет (например, оба механические судна)
                     else:
                         if is_head_on:
-                            tgt_expl.append("  Встречные курсы (Правило 14). Оба судна должны изменить курс вправо.")
+                            tgt_expl.append("  ситуация встречных курсов согласно Правилу 14: оба судна должны изменить курс вправо;")
                             role = VesselRole.BOTH_GIVE_WAY
                             action = Action.ALTER_COURSE_STARBOARD
                         elif is_crossing:
                             if encounter_sector == "crossing_starboard":
-                                tgt_expl.append("  Пересечение курсов (Правило 15). Цель справа. Мы обязаны уступить дорогу.")
+                                tgt_expl.append("  ситуация пересечения курсов согласно Правилу 15: цель находится справа, мы обязаны уступить дорогу;")
                                 role = VesselRole.GIVE_WAY
                                 action = Action.ALTER_COURSE_STARBOARD
                             else:
-                                tgt_expl.append("  Пересечение курсов (Правило 15). Цель слева. Мы имеем преимущество и сохраняем курс/скорость.")
+                                tgt_expl.append("  ситуация пересечения курсов согласно Правилу 15: цель находится слева, мы имеем преимущество и сохраняем курс и скорость;")
                                 role = VesselRole.STAND_ON
                                 action = Action.KEEP_COURSE_SPEED
                         else:
-                            tgt_expl.append("  Неопределенный сектор равного приоритета. Фолбэк на хорошую морскую практику (поворот вправо).")
+                            tgt_expl.append("  неопределенный сектор равного приоритета: рекомендуется изменить курс вправо в соответствии с хорошей морской практикой;")
                             role = VesselRole.GIVE_WAY
                             action = Action.ALTER_COURSE_STARBOARD
 
             # Проверяем маневр крайнего момента для роли Stand-on (Правило 17 b)
             # Если мы Stand-on, но сближение критически близкое (TCPA < 9 минут / 0.15 ч), мы ОБЯЗАНЫ действовать
             if role == VesselRole.STAND_ON and tcpa < 0.15:
-                tgt_expl.append(f"  [КРАЙНЯЯ НЕОБХОДИМОСТЬ] Время сближения {tcpa*60:.1f} мин критическое. Правило 17 (b) обязывает нас маневрировать!")
+                tgt_expl.append(f"  крайняя необходимость согласно Правилу 17 (b): время сближения {tcpa*60:.1f} минут является критическим, мы обязаны маневрировать для избежания столкновения;")
                 role = VesselRole.GIVE_WAY
                 action = Action.ALTER_COURSE_STARBOARD  # Правило 17 (с) запрещает поворот влево для цели слева
             
@@ -236,6 +244,11 @@ class COLREGInferenceEngine:
             for h in range(360):
                 unified_forbidden_headings[h] = unified_forbidden_headings[h] or tgt_forbidden[h]
                 
+        # Форматируем список целей согласно Rule 3
+        for i, status in enumerate(targets_statuses):
+            suffix = "." if i == len(targets_statuses) - 1 else ";"
+            general_explanation.append(f"- {status}{suffix}")
+
         # 2. Если опасности нет вообще
         if not active_risks:
             return Decision(
@@ -267,7 +280,7 @@ class COLREGInferenceEngine:
                 recommended_heading=own.course,
                 forbidden_sectors=convert_boolean_array_to_sectors(unified_forbidden_headings),
                 target_decisions=target_decisions,
-                explanation=general_explanation + ["Наше судно сохраняет курс и скорость (Stand-on для всех активных угроз)."]
+                explanation=general_explanation + ["Наше судно сохраняет курс и скорость."]
             )
             
         # Иначе мы обязаны изменить курс
@@ -302,24 +315,24 @@ class COLREGInferenceEngine:
         if safe_stbd_heading is not None and safe_stbd_angle <= 110.0:
             recommended_heading = safe_stbd_heading
             recommended_action = Action.ALTER_COURSE_STARBOARD
-            decision_notes.append(f"Рекомендован поворот вправо на курс {recommended_heading:.1f}° (изменение на +{safe_stbd_angle:.1f}°).")
+            decision_notes.append(f"рекомендован поворот вправо на курс {recommended_heading:.1f}° с изменением на +{safe_stbd_angle:.1f}°")
         # Если правый поворот слишком велик, но левый поворот меньше и существует
         elif safe_port_heading is not None:
             recommended_heading = safe_port_heading
             recommended_action = Action.ALTER_COURSE_PORT
-            decision_notes.append(f"Рекомендован поворот влево на курс {recommended_heading:.1f}° (изменение на -{safe_port_angle:.1f}°).")
-            decision_notes.append("ВНИМАНИЕ: Поворот влево противоречит стандартным предпочтениям МППСС, выполняйте его с осторожностью!")
+            decision_notes.append(f"рекомендован поворот влево на курс {recommended_heading:.1f}° с изменением на -{safe_port_angle:.1f}°")
+            decision_notes.append("поворот влево противоречит стандартным рекомендациям правил расхождения")
         # Если правый поворот существует, но он велик, а левого нет
         elif safe_stbd_heading is not None:
             recommended_heading = safe_stbd_heading
             recommended_action = Action.ALTER_COURSE_STARBOARD
-            decision_notes.append(f"Рекомендован глубокий поворот вправо на курс {recommended_heading:.1f}° (изменение на +{safe_stbd_angle:.1f}°).")
+            decision_notes.append(f"рекомендован глубокий поворот вправо на курс {recommended_heading:.1f}° с изменением на +{safe_stbd_angle:.1f}°")
         else:
             # Безопасных курсов нет!
             recommended_heading = None
             recommended_action = Action.REDUCE_SPEED_OR_STOP
-            decision_notes.append("КРИТИЧЕСКАЯ СИТУАЦИЯ: Все сектора курсов перекрыты опасностями!")
-            decision_notes.append("Рекомендуется НЕМЕДЛЕННО снизить ход, остановиться или дать задний ход (Правило 8 (e)).")
+            decision_notes.append("критическая ситуация: все сектора курсов перекрыты опасностями")
+            decision_notes.append("рекомендуется немедленно снизить ход, остановиться или дать задний ход согласно Правилу 8 (e)")
 
         # 4. Проверка физических ограничений (радиус циркуляции)
         maneuver_possible = True
@@ -331,11 +344,11 @@ class COLREGInferenceEngine:
             if not is_possible:
                 maneuver_possible = False
                 decision_notes.append(
-                    f"[ФИЗИЧЕСКОЕ ОГРАНИЧЕНИЕ] Наше судно имеет радиус циркуляции {own.min_turning_radius} миль. "
-                    f"На скорости {own.speed} уз. мы не успеем довернуть на {delta_angle:.1f}° до достижения CPA "
-                    f"ближайшей цели {closest_target_name} ({closest_tcpa*60:.1f} мин)!"
+                    f"физическое ограничение: наше судно имеет радиус циркуляции {own.min_turning_radius} миль, "
+                    f"на скорости {own.speed} узлов мы не успеем завершить поворот на {delta_angle:.1f}° до достижения "
+                    f"кратчайшего сближения с целью {closest_target_name} за {closest_tcpa*60:.1f} минут"
                 )
-                decision_notes.append("РЕКОМЕНДАЦИЯ: Совместите поворот с экстренным снижением скорости для уменьшения радиуса циркуляции.")
+                decision_notes.append("рекомендация: совместите поворот с экстренным снижением скорости для уменьшения радиуса циркуляции")
 
         # Формируем объяснение
         explanation = general_explanation + ["-" * 40]
@@ -347,15 +360,17 @@ class COLREGInferenceEngine:
                 explanation.append("")
                 
         explanation.append("-" * 40)
-        explanation.append("ОБЩЕЕ РЕШЕНИЕ:")
-        explanation.extend(decision_notes)
+        explanation.append("общее решение:")
+        for i, note in enumerate(decision_notes):
+            suffix = "." if i == len(decision_notes) - 1 else ";"
+            explanation.append(f"- {note}{suffix}")
         
         # Секторы
         forbidden_sectors = convert_boolean_array_to_sectors(unified_forbidden_headings)
         sectors_desc = []
         for start, end in forbidden_sectors:
             sectors_desc.append(f"{start:.0f}°-{end:.0f}°")
-        explanation.append(f"Объединенные опасные сектора курсов: {', '.join(sectors_desc) if sectors_desc else 'нет'}")
+        explanation.append(f"объединенные опасные сектора курсов: {', '.join(sectors_desc) if sectors_desc else 'нет'}")
         
         return Decision(
             collision_risk=True,
