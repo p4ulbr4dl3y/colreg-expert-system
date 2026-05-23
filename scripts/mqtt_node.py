@@ -9,8 +9,7 @@ import paho.mqtt.client as mqtt
 sys.path.append(".")
 
 from src.engine import COLREGInferenceEngine
-from src.models import (Action, Environment, Vessel, VesselRole, VesselType,
-                        Visibility)
+from src.models import Action, Environment, Vessel, VesselRole, VesselType, Visibility
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"

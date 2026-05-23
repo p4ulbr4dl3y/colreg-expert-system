@@ -1,15 +1,32 @@
 from typing import Dict, List, Optional, Tuple
 
-from .geometry import (CRITICAL_TCPA, SAFE_CPA_DISTANCE, calculate_cpa_tcpa,
-                       calculate_distance, calculate_relative_bearing,
-                       calculate_true_bearing,
-                       convert_boolean_array_to_sectors,
-                       get_forbidden_headings_for_target,
-                       is_collision_risk_exists, is_turn_possible)
-from .models import (Action, Decision, Environment, TargetDecision, Vessel,
-                     VesselRole, VesselType, Visibility)
-from .rules import (classify_encounter_sectors,
-                    evaluate_sailing_vessels_rule12, get_vessel_priority_rank)
+from .geometry import (
+    CRITICAL_TCPA,
+    SAFE_CPA_DISTANCE,
+    calculate_cpa_tcpa,
+    calculate_distance,
+    calculate_relative_bearing,
+    calculate_true_bearing,
+    convert_boolean_array_to_sectors,
+    get_forbidden_headings_for_target,
+    is_collision_risk_exists,
+    is_turn_possible,
+)
+from .models import (
+    Action,
+    Decision,
+    Environment,
+    TargetDecision,
+    Vessel,
+    VesselRole,
+    VesselType,
+    Visibility,
+)
+from .rules import (
+    classify_encounter_sectors,
+    evaluate_sailing_vessels_rule12,
+    get_vessel_priority_rank,
+)
 
 
 class COLREGInferenceEngine:
