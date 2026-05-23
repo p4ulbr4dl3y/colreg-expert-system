@@ -1,6 +1,6 @@
-from enum import Enum, auto
-from dataclasses import dataclass
-from typing import List, Optional
+from enum import Enum
+from dataclasses import dataclass, field
+from typing import List, Optional, Tuple, Dict
 
 class VesselType(Enum):
     POWER_DRIVEN = "POWER_DRIVEN"  # Судно с механическим двигателем
@@ -60,11 +60,12 @@ class VesselRole(Enum):
 @dataclass
 class Vessel:
     name: str
-    x: float          # Координата X (в морских милях, NM)
-    y: float          # Координата Y (в морских милях, NM)
-    course: float     # Курс судна (в градусах от 0 до 360, 0 = Север, 90 = Восток)
-    speed: float      # Скорость судна (в узлах, kn)
+    x: float                  # Координата X (в морских милях, NM)
+    y: float                  # Координата Y (в морских милях, NM)
+    course: float             # Курс судна (в градусах от 0 до 360, 0 = Север, 90 = Восток)
+    speed: float              # Скорость судна (в узлах, kn)
     vessel_type: VesselType = VesselType.POWER_DRIVEN
+    min_turning_radius: float = 0.25 # Минимальный радиус циркуляции (в милях, NM), около 460 метров
 
 @dataclass
 class Environment:
@@ -73,9 +74,23 @@ class Environment:
     in_tss: bool = False  # Traffic Separation Scheme (Система разделения движения)
 
 @dataclass
-class Decision:
+class TargetDecision:
+    target_name: str
     collision_risk: bool
     encounter_type: str
     own_role: VesselRole
     recommended_action: Action
+    cpa: float
+    tcpa: float
     explanation: List[str]
+
+@dataclass
+class Decision:
+    collision_risk: bool
+    own_role: VesselRole
+    recommended_action: Action
+    recommended_heading: Optional[float]
+    forbidden_sectors: List[Tuple[float, float]] = field(default_factory=list) # Списки углов (start, end)
+    target_decisions: Dict[str, TargetDecision] = field(default_factory=dict)
+    maneuver_possible: bool = True
+    explanation: List[str] = field(default_factory=list)
