@@ -111,7 +111,7 @@ class COLREGInferenceEngine:
             # Применяем правила МППСС-72 по отдельности к данной цели
             tgt_notes = []
 
-            # Ограниченная видимость (правило 19)
+            # ограниченная видимость (правило 19)
             if env.visibility == Visibility.RESTRICTED:
                 is_ahead_of_beam = rb_own <= 90 or rb_own >= 270
                 is_we_overtaking = 112.5 <= rb_tgt <= 247.5
@@ -148,7 +148,7 @@ class COLREGInferenceEngine:
                         role = VesselRole.BOTH_GIVE_WAY
                         action = Action.ALTER_COURSE_STARBOARD
 
-            # Хорошая видимость (Раздел II)
+            # хорошая видимость (раздел II)
             else:
                 encounter_sector, is_head_on, is_crossing, is_overtaking = (
                     classify_encounter_sectors(own, tgt)
@@ -230,7 +230,7 @@ class COLREGInferenceEngine:
                             action = Action.ALTER_COURSE_STARBOARD
 
             # Проверяем маневр крайнего момента для роли Stand-on (правило 17 b)
-            # Если мы Stand-on, но сближение критически близкое (TCPA < 9 минут / 0.15 ч), мы ОБЯЗАНЫ действовать
+            # Если мы Stand-on, но сближение критически близкое (TCPA < 9 минут / 0.15 ч), мы обязаны действовать
             if role == VesselRole.STAND_ON and tcpa < 0.15:
                 tgt_notes.append(
                     f"крайняя необходимость согласно правилу 17 (b): время сближения {tcpa*60:.1f} минут является критическим, мы обязаны маневрировать для избежания столкновения"
