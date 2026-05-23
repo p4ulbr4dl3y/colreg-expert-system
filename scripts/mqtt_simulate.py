@@ -8,11 +8,11 @@ MQTT_TOPIC_RESULT = "colreg/expert/result"
 
 def on_connect(client, userdata, flags, reason_code, properties):
     if reason_code == 0:
-        print("Подключено к MQTT брокеру.")
+        print("подключено к MQTT-брокеру.")
         client.subscribe(MQTT_TOPIC_RESULT)
-        print(f"Подписан на топик результатов: {MQTT_TOPIC_RESULT}")
+        print(f"подписан на топик результатов: {MQTT_TOPIC_RESULT}")
         
-        # Симулируем ситуацию пересечения и лобовой угрозы одновременно
+        # симулируем ситуацию пересечения и встречного сближения одновременно
         test_msg = {
             "request_id": "sim-req-101",
             "action": "evaluate",
@@ -50,26 +50,26 @@ def on_connect(client, userdata, flags, reason_code, properties):
             }
         }
         
-        print(f"Отправка команды оценки обстановки в топик {MQTT_TOPIC_COMMAND}...")
+        print(f"отправка команды оценки обстановки в топик {MQTT_TOPIC_COMMAND}...")
         client.publish(MQTT_TOPIC_COMMAND, json.dumps(test_msg))
     else:
-        print(f"Ошибка подключения: {reason_code}")
+        print(f"ошибка подключения: {reason_code}")
 
 def on_message(client, userdata, msg):
-    print(f"\nПОЛУЧЕН ОТВЕТ ОТ ЭКСПЕРТНОЙ СИСТЕМЫ (Топик: {msg.topic})")
+    print(f"\nполучен ответ от экспертной системы, топик: {msg.topic}")
     try:
         payload = json.loads(msg.payload.decode("utf-8"))
         print(json.dumps(payload, indent=2, ensure_ascii=False))
     except Exception as e:
-        print(f"Ошибка парсинга ответа: {e}")
-        print(f"Сырые данные: {msg.payload}")
-    print("\nСимуляция успешно завершена!")
+        print(f"ошибка парсинга ответа: {e}")
+        print(f"сырые данные: {msg.payload}")
+    print("\nсимуляция успешно завершена!")
     client.disconnect()
 
 client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, "test_navigation_computer")
 client.on_connect = on_connect
 client.on_message = on_message
 
-print("Подключение к брокеру...")
+print("подключение к брокеру...")
 client.connect(MQTT_BROKER, MQTT_PORT, 60)
 client.loop_forever()

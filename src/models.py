@@ -6,9 +6,9 @@ class VesselType(Enum):
     POWER_DRIVEN = "POWER_DRIVEN"  # Судно с механическим двигателем
     SAILING = "SAILING"            # Парусное судно
     FISHING = "FISHING"            # Судно, занятое ловом рыбы
-    CBD = "CBD"                    # Судно, стесненное своей осадкой (Constrained by Draft)
-    RAM = "RAM"                    # Судно, ограниченное в возможности маневрировать (Restricted Ability to Maneuver)
-    NUC = "NUC"                    # Судно, лишенное возможности управляться (Not Under Command)
+    CBD = "CBD"                    # судно, стесненное своей осадкой
+    RAM = "RAM"                    # судно, ограниченное в возможности маневрировать
+    NUC = "NUC"                    # судно, лишенное возможности управляться
 
     def description_ru(self) -> str:
         descriptions = {
@@ -50,8 +50,8 @@ class VesselRole(Enum):
 
     def description_ru(self) -> str:
         descriptions = {
-            VesselRole.STAND_ON: "судно, которому уступают дорогу (Stand-on)",
-            VesselRole.GIVE_WAY: "судно, уступающее дорогу (Give-way)",
+            VesselRole.STAND_ON: "судно, которому уступают дорогу",
+            VesselRole.GIVE_WAY: "судно, уступающее дорогу",
             VesselRole.BOTH_GIVE_WAY: "оба судна обязаны уступить дорогу и изменить курс",
             VesselRole.N_A: "не применимо"
         }
@@ -60,18 +60,18 @@ class VesselRole(Enum):
 @dataclass
 class Vessel:
     name: str
-    x: float                  # Координата X (в морских милях, NM)
-    y: float                  # Координата Y (в морских милях, NM)
+    x: float                  # Координата X (в морских милях)
+    y: float                  # Координата Y (в морских милях)
     course: float             # Курс судна (в градусах от 0 до 360, 0 = Север, 90 = Восток)
-    speed: float              # Скорость судна (в узлах, kn)
+    speed: float              # Скорость судна (в узлах)
     vessel_type: VesselType = VesselType.POWER_DRIVEN
-    min_turning_radius: float = 0.25 # Минимальный радиус циркуляции (в милях, NM), около 460 метров
+    min_turning_radius: float = 0.25 # Минимальный радиус циркуляции (в милях), около 460 метров
 
 @dataclass
 class Environment:
     visibility: Visibility = Visibility.GOOD
     in_narrow_channel: bool = False
-    in_tss: bool = False  # Traffic Separation Scheme (Система разделения движения)
+    in_tss: bool = False  # система разделения движения
 
 @dataclass
 class TargetDecision:
