@@ -1,11 +1,16 @@
-from typing import List, Tuple, Optional
-from .models import Vessel, VesselType, VesselRole, Action, Visibility, Environment, Decision
+from typing import List, Tuple, Optional, Dict
+from .models import Vessel, VesselType, VesselRole, Action, Visibility, Environment, Decision, TargetDecision
 from .geometry import (
     calculate_distance,
     calculate_relative_bearing,
     calculate_true_bearing,
     calculate_cpa_tcpa,
-    is_collision_risk_exists
+    is_collision_risk_exists,
+    is_turn_possible,
+    get_forbidden_headings_for_target,
+    convert_boolean_array_to_sectors,
+    SAFE_CPA_DISTANCE,
+    CRITICAL_TCPA
 )
 from .rules import (
     get_vessel_priority_rank,
@@ -17,244 +22,348 @@ class COLREGInferenceEngine:
     def __init__(self):
         pass
 
-    def evaluate(self, own: Vessel, target: Vessel, env: Environment, wind_direction: Optional[float] = None) -> Decision:
+    def evaluate(self, own: Vessel, targets: List[Vessel], env: Environment, wind_direction: Optional[float] = None) -> Decision:
         """
-        Основной метод логического вывода экспертной системы.
-        Вычисляет параметры сближения, проверяет опасность столкновения,
-        применяет правила МППСС-72 и возвращает решение.
+        Многоцелевой логический вывод экспертной системы.
+        Вычисляет индивидуальные риски для каждой цели, строит карту запрещенных секторов курсов,
+        принимает обобщенное решение по маневрированию и проверяет физические ограничения судна.
         """
-        # 1. Проверяем опасность столкновения
-        risk_exists, dist, cpa, tcpa = is_collision_risk_exists(own, target)
-        
-        # Получаем угловые параметры для вывода в отчете
-        rb_own = calculate_relative_bearing(own, target)
-        tb_own = calculate_true_bearing(own, target)
-        rb_tgt = calculate_relative_bearing(target, own)
-        
-        # Описание взаимной геометрии
-        geo_details = [
-            f"Текущая дистанция: {dist:.2f} миль (NM).",
-            f"Истинный пеленг на цель: {tb_own:.1f}°.",
-            f"Относительный пеленг на цель (у нас): {rb_own:.1f}° (правый борт" if rb_own < 180 else f"Относительный пеленг на цель (у нас): {rb_own:.1f}° (левый борт",
-            f"Относительный пеленг на нас (у цели): {rb_tgt:.1f}°.",
-            f"Прогноз сближения: CPA = {cpa:.2f} миль, TCPA = {tcpa*60:.1f} мин." if tcpa != float('inf') else "Суда движутся параллельно."
-        ]
-        # Закрываем скобки в описании пеленга
-        geo_details[2] += ")"
-
-        if not risk_exists:
+        if not targets:
             return Decision(
                 collision_risk=False,
-                encounter_type="SAFE",
                 own_role=VesselRole.N_A,
                 recommended_action=Action.N_A,
-                explanation=[
-                    "Опасность столкновения отсутствует.",
-                    f"Дистанция сближения (CPA) {cpa:.2f} миль безопасна (больше порога {2.0} миль) " +
-                    f"или суда расходятся (TCPA = {tcpa:.2f} ч)."
-                ] + geo_details
+                recommended_heading=own.course,
+                explanation=["Нет окружающих судов-целей для оценки."]
             )
 
-        # 2. Если опасность существует, применяем правила в зависимости от видимости
-        explanation = ["ОПАСНОСТЬ СТОЛКНОВЕНИЯ СУЩЕСТВУЕТ!"] + geo_details
+        # 1. Поцелевая оценка рисков
+        active_risks = False
+        target_decisions: Dict[str, TargetDecision] = {}
+        unified_forbidden_headings = [False] * 360
+        closest_tcpa = float('inf')
+        closest_target_name = ""
         
-        # 2.1. Ограниченная видимость (Правило 19)
-        if env.visibility == Visibility.RESTRICTED:
-            explanation.append("Правило 19 (Плавание судов при ограниченной видимости):")
-            explanation.append("  Суда не находятся на виду друг у друга (ограниченная видимость).")
-            explanation.append("  Каждое судно действует самостоятельно на основании данных радиолокатора.")
-            explanation.append("  Внимание: Приоритеты типов судов (Правило 18) в тумане НЕ действуют!")
+        # Общая сводка
+        general_explanation = ["СТАТУС ОКРУЖАЮЩЕЙ ОБСТАНОВКИ:"]
+        
+        for tgt in targets:
+            risk_exists, dist, cpa, tcpa = is_collision_risk_exists(own, tgt)
             
-            # Действия по Правилу 19 (d)
-            # (i) Изменение курса влево следует избегать, если судно впереди траверза и не является обгоняемым
-            # (ii) Изменение курса в сторону судна на траверзе или позади траверза следует избегать
+            # Пеленги
+            rb_own = calculate_relative_bearing(own, tgt)
+            tb_own = calculate_true_bearing(own, tgt)
+            rb_tgt = calculate_relative_bearing(tgt, own)
             
-            # Проверяем положение цели: впереди или позади траверза
-            # Впереди траверза: курсовой пеленг в диапазоне 0..90 или 270..360 (т.е. rb_own <= 90 или rb_own >= 270)
-            is_ahead_of_beam = (rb_own <= 90 or rb_own >= 270)
+            tgt_geo_desc = (
+                f"Цель {tgt.name}: Дистанция {dist:.2f} миль | CPA {cpa:.2f} миль | "
+                f"TCPA {tcpa*60:.1f} мин | Пеленг {rb_own:.1f}°"
+            )
             
-            # Проверяем, обгоняем ли мы его (мы находимся в его кормовом секторе)
-            is_we_overtaking = (112.5 <= rb_tgt <= 247.5)
+            if not risk_exists:
+                # Цель безопасна
+                target_decisions[tgt.name] = TargetDecision(
+                    target_name=tgt.name,
+                    collision_risk=False,
+                    encounter_type="SAFE",
+                    own_role=VesselRole.N_A,
+                    recommended_action=Action.N_A,
+                    cpa=cpa,
+                    tcpa=tcpa,
+                    explanation=[f"Сближение с {tgt.name} безопасно."]
+                )
+                general_explanation.append(f"  [Безопасно] {tgt_geo_desc}")
+                
+                # Даже для безопасных целей рассчитываем их "опасный сектор", чтобы случайно не повернуть в них
+                # Но не накладываем обязательство маневра из-за этой цели.
+                tgt_forbidden = get_forbidden_headings_for_target(own, tgt)
+                for h in range(360):
+                    unified_forbidden_headings[h] = unified_forbidden_headings[h] or tgt_forbidden[h]
+                continue
+                
+            # Опасность существует
+            active_risks = True
+            if tcpa > 0 and tcpa < closest_tcpa:
+                closest_tcpa = tcpa
+                closest_target_name = tgt.name
+                
+            general_explanation.append(f"  [ОПАСНОСТЬ] {tgt_geo_desc}")
             
-            if is_ahead_of_beam:
-                if not is_we_overtaking:
-                    explanation.append("  -> Цель находится впереди траверза и не является обгоняемой.")
-                    explanation.append("  -> Согласно Правилу 19 (d)(i), следует избегать изменения курса влево.")
-                    return Decision(
-                        collision_risk=True,
-                        encounter_type="RESTRICTED_VISIBILITY_AHEAD",
-                        own_role=VesselRole.BOTH_GIVE_WAY,  # В тумане уступают оба
-                        recommended_action=Action.ALTER_COURSE_STARBOARD,
-                        explanation=explanation
-                    )
+            # Применяем правила МППСС-72 по отдельности к данной цели
+            tgt_expl = [f"Оценка расхождения с судно-целью {tgt.name}:"]
+            
+            # Ограниченная видимость (Правило 19)
+            if env.visibility == Visibility.RESTRICTED:
+                is_ahead_of_beam = (rb_own <= 90 or rb_own >= 270)
+                is_we_overtaking = (112.5 <= rb_tgt <= 247.5)
+                
+                tgt_expl.append("  Применяется Правило 19 (Ограниченная видимость). Приоритеты типов судов не действуют.")
+                
+                if is_ahead_of_beam:
+                    if not is_we_overtaking:
+                        tgt_expl.append("  Цель впереди траверза и не обгоняется. Избегать изменения курса влево (Правило 19 (d)(i)).")
+                        role = VesselRole.BOTH_GIVE_WAY
+                        action = Action.ALTER_COURSE_STARBOARD
+                    else:
+                        tgt_expl.append("  Мы обгоняем цель в тумане. Обязаны уступить дорогу.")
+                        role = VesselRole.GIVE_WAY
+                        action = Action.ALTER_COURSE_STARBOARD
                 else:
-                    explanation.append("  -> Мы обгоняем цель в условиях ограниченной видимости.")
-                    explanation.append("  -> Безопаснее изменить курс на правый борт для обхода.")
-                    return Decision(
-                        collision_risk=True,
-                        encounter_type="RESTRICTED_VISIBILITY_OVERTAKING",
-                        own_role=VesselRole.GIVE_WAY,
-                        recommended_action=Action.ALTER_COURSE_STARBOARD,
-                        explanation=explanation
-                    )
-            else:
-                # Цель на траверзе или позади него (rb_own от 90 до 270)
-                # Избегать изменения курса в сторону судна (Rule 19 d(ii))
-                is_target_starboard = (90 < rb_own <= 180)
-                if is_target_starboard:
-                    explanation.append("  -> Цель находится по правому борту на траверзе или позади него.")
-                    explanation.append("  -> Согласно Правилу 19 (d)(ii), следует избегать изменения курса вправо (в сторону судна).")
-                    return Decision(
-                        collision_risk=True,
-                        encounter_type="RESTRICTED_VISIBILITY_ABEAFT_STARBOARD",
-                        own_role=VesselRole.BOTH_GIVE_WAY,
-                        recommended_action=Action.ALTER_COURSE_PORT,
-                        explanation=explanation
-                    )
-                else:
-                    explanation.append("  -> Цель находится по левому борту на траверзе или позади него.")
-                    explanation.append("  -> Согласно Правилу 19 (d)(ii), следует избегать изменения курса влево (в сторону судна).")
-                    return Decision(
-                        collision_risk=True,
-                        encounter_type="RESTRICTED_VISIBILITY_ABEAFT_PORT",
-                        own_role=VesselRole.BOTH_GIVE_WAY,
-                        recommended_action=Action.ALTER_COURSE_STARBOARD,
-                        explanation=explanation
-                    )
-
-        # 2.2. Хорошая видимость (суда на виду друг у друга)
-        explanation.append("Раздел II (Плавание судов, находящихся на виду друг у друга):")
-        
-        # Шаг 1: Проверяем обгон (Правило 13 имеет высший приоритет над Правилом 18)
-        encounter_sector, is_head_on, is_crossing, is_overtaking = classify_encounter_sectors(own, target)
-        
-        if is_overtaking:
-            if encounter_sector == "own_overtaking":
-                explanation.append("  -> Ситуация ОБГОНА (Правило 13). Наше судно обгоняет цель.")
-                explanation.append("  -> Согласно Правилу 13 (а), обгоняющее судно обязано держаться в стороне от пути обгоняемого.")
-                return Decision(
-                    collision_risk=True,
-                    encounter_type="OVERTAKING_GIVE_WAY",
-                    own_role=VesselRole.GIVE_WAY,
-                    recommended_action=Action.ALTER_COURSE_STARBOARD,
-                    explanation=explanation
-                )
-            elif encounter_sector == "target_overtaking":
-                explanation.append("  -> Ситуация ОБГОНА (Правило 13). Цель обгоняет наше судно.")
-                explanation.append("  -> Согласно Правилу 13 (а) и Правилу 17 (а)(i), наше судно должно сохранять курс и скорость.")
-                return Decision(
-                    collision_risk=True,
-                    encounter_type="OVERTAKING_STAND_ON",
-                    own_role=VesselRole.STAND_ON,
-                    recommended_action=Action.KEEP_COURSE_SPEED,
-                    explanation=explanation
-                )
-
-        # Шаг 2: Проверяем Парусное vs Парусное (Правило 12)
-        if own.vessel_type == VesselType.SAILING and target.vessel_type == VesselType.SAILING:
-            if wind_direction is not None:
-                role, action, rule12_expl = evaluate_sailing_vessels_rule12(own, target, wind_direction)
-                explanation.extend(rule12_expl)
-                return Decision(
-                    collision_risk=True,
-                    encounter_type="SAILING_CROSSING",
-                    own_role=role,
-                    recommended_action=action,
-                    explanation=explanation
-                )
-            else:
-                explanation.append("  [ВНИМАНИЕ] Оба судна парусные (Правило 12), но направление ветра не задано!")
-                explanation.append("  По умолчанию: уступает судно по левому борту.")
-                # Фолбэк на левый борт
-                if rb_own < 180:
-                    return Decision(
-                        collision_risk=True,
-                        encounter_type="SAILING_FALLBACK_GIVE_WAY",
-                        own_role=VesselRole.GIVE_WAY,
-                        recommended_action=Action.ALTER_COURSE_STARBOARD,
-                        explanation=explanation
-                    )
-                else:
-                    return Decision(
-                        collision_risk=True,
-                        encounter_type="SAILING_FALLBACK_STAND_ON",
-                        own_role=VesselRole.STAND_ON,
-                        recommended_action=Action.KEEP_COURSE_SPEED,
-                        explanation=explanation
-                    )
-
-        # Шаг 3: Проверяем взаимные обязанности (Правило 18)
-        own_rank = get_vessel_priority_rank(own.vessel_type)
-        tgt_rank = get_vessel_priority_rank(target.vessel_type)
-        
-        if own_rank != tgt_rank:
-            explanation.append("  -> Взаимные обязанности судов (Правило 18):")
-            explanation.append(f"     Наш статус: {own.vessel_type.description_ru()} (приоритет {own_rank})")
-            explanation.append(f"     Статус цели: {target.vessel_type.description_ru()} (приоритет {tgt_rank})")
+                    is_target_starboard = (90 < rb_own <= 180)
+                    if is_target_starboard:
+                        tgt_expl.append("  Цель на траверзе или позади него справа. Избегать изменения курса вправо (в сторону судна, Правило 19 (d)(ii)).")
+                        role = VesselRole.BOTH_GIVE_WAY
+                        action = Action.ALTER_COURSE_PORT
+                    else:
+                        tgt_expl.append("  Цель на траверзе или позади него слева. Избегать изменения курса влево (в сторону судна, Правило 19 (d)(ii)).")
+                        role = VesselRole.BOTH_GIVE_WAY
+                        action = Action.ALTER_COURSE_STARBOARD
             
-            if own_rank < tgt_rank:
-                explanation.append(f"  -> Наше судно имеет меньший приоритет и должно уступить дорогу (Правило 18).")
-                return Decision(
-                    collision_risk=True,
-                    encounter_type="PRIORITY_GIVE_WAY",
-                    own_role=VesselRole.GIVE_WAY,
-                    recommended_action=Action.ALTER_COURSE_STARBOARD,
-                    explanation=explanation
-                )
+            # Хорошая видимость (Раздел II)
             else:
-                explanation.append(f"  -> Наше судно имеет больший приоритет и должно сохранять курс и скорость (Правило 18/17).")
-                return Decision(
-                    collision_risk=True,
-                    encounter_type="PRIORITY_STAND_ON",
-                    own_role=VesselRole.STAND_ON,
-                    recommended_action=Action.KEEP_COURSE_SPEED,
-                    explanation=explanation
-                )
+                encounter_sector, is_head_on, is_crossing, is_overtaking = classify_encounter_sectors(own, tgt)
+                
+                # Шаг 2.2.1: Обгон (Правило 13)
+                if is_overtaking:
+                    if encounter_sector == "own_overtaking":
+                        tgt_expl.append("  Ситуация ОБГОНА (Правило 13). Мы обгоняем цель. Обязаны держаться в стороне от её пути.")
+                        role = VesselRole.GIVE_WAY
+                        action = Action.ALTER_COURSE_STARBOARD
+                    else:
+                        tgt_expl.append("  Ситуация ОБГОНА (Правило 13). Цель обгоняет нас. Мы должны сохранять курс и скорость.")
+                        role = VesselRole.STAND_ON
+                        action = Action.KEEP_COURSE_SPEED
+                
+                # Шаг 2.2.2: Парусные суда (Правило 12)
+                elif own.vessel_type == VesselType.SAILING and tgt.vessel_type == VesselType.SAILING:
+                    role, action, rule12_expl = evaluate_sailing_vessels_rule12(own, tgt, wind_direction or 0.0)
+                    tgt_expl.extend(rule12_expl)
+                
+                # Шаг 2.2.3: Взаимные обязанности (Правило 18)
+                else:
+                    own_rank = get_vessel_priority_rank(own.vessel_type)
+                    tgt_rank = get_vessel_priority_rank(tgt.vessel_type)
+                    
+                    if own_rank != tgt_rank:
+                        tgt_expl.append(f"  Взаимные обязанности (Правило 18): {own.vessel_type.description_ru()} vs {tgt.vessel_type.description_ru()}")
+                        if own_rank < tgt_rank:
+                            tgt_expl.append("  Мы обязаны уступить дорогу более приоритетному судну.")
+                            role = VesselRole.GIVE_WAY
+                            action = Action.ALTER_COURSE_STARBOARD
+                        else:
+                            tgt_expl.append("  Цель имеет меньший приоритет и обязана уступить дорогу. Мы сохраняем курс и скорость.")
+                            role = VesselRole.STAND_ON
+                            action = Action.KEEP_COURSE_SPEED
+                    
+                    # Равный приоритет (например, оба механические судна)
+                    else:
+                        if is_head_on:
+                            tgt_expl.append("  Встречные курсы (Правило 14). Оба судна должны изменить курс вправо.")
+                            role = VesselRole.BOTH_GIVE_WAY
+                            action = Action.ALTER_COURSE_STARBOARD
+                        elif is_crossing:
+                            if encounter_sector == "crossing_starboard":
+                                tgt_expl.append("  Пересечение курсов (Правило 15). Цель справа. Мы обязаны уступить дорогу.")
+                                role = VesselRole.GIVE_WAY
+                                action = Action.ALTER_COURSE_STARBOARD
+                            else:
+                                tgt_expl.append("  Пересечение курсов (Правило 15). Цель слева. Мы имеем преимущество и сохраняем курс/скорость.")
+                                role = VesselRole.STAND_ON
+                                action = Action.KEEP_COURSE_SPEED
+                        else:
+                            tgt_expl.append("  Неопределенный сектор равного приоритета. Фолбэк на хорошую морскую практику (поворот вправо).")
+                            role = VesselRole.GIVE_WAY
+                            action = Action.ALTER_COURSE_STARBOARD
 
-        # Шаг 4: Если приоритеты равны (например, оба механические судна)
-        # Применяем Правило 14 (Встречные курсы) или Правило 15 (Пересечение)
-        if is_head_on:
-            explanation.append("  -> Ситуация встречных курсов (Правило 14).")
-            explanation.append("  -> Согласно Правилу 14 (а), каждое судно должно изменить курс вправо, чтобы пройти у другого по левому борту.")
+            # Проверяем маневр крайнего момента для роли Stand-on (Правило 17 b)
+            # Если мы Stand-on, но сближение критически близкое (TCPA < 9 минут / 0.15 ч), мы ОБЯЗАНЫ действовать
+            if role == VesselRole.STAND_ON and tcpa < 0.15:
+                tgt_expl.append(f"  [КРАЙНЯЯ НЕОБХОДИМОСТЬ] Время сближения {tcpa*60:.1f} мин критическое. Правило 17 (b) обязывает нас маневрировать!")
+                role = VesselRole.GIVE_WAY
+                action = Action.ALTER_COURSE_STARBOARD  # Правило 17 (с) запрещает поворот влево для цели слева
+            
+            target_decisions[tgt.name] = TargetDecision(
+                target_name=tgt.name,
+                collision_risk=True,
+                encounter_type=encounter_sector if env.visibility == Visibility.GOOD else "RESTRICTED",
+                own_role=role,
+                recommended_action=action,
+                cpa=cpa,
+                tcpa=tcpa,
+                explanation=tgt_expl
+            )
+            
+            # Рассчитываем эффективную безопасную дистанцию для поиска курсов (масштабируем при близком сближении)
+            effective_safe_dist = SAFE_CPA_DISTANCE
+            if dist < SAFE_CPA_DISTANCE:
+                effective_safe_dist = max(0.5, dist * 0.8)
+                
+            tgt_forbidden = get_forbidden_headings_for_target(own, tgt, safe_dist=effective_safe_dist)
+            
+            # Накладываем дополнительные ограничения на повороты согласно МППСС-72
+            if env.visibility == Visibility.GOOD:
+                # Если мы уступаем дорогу или сближаемся лоб-в-лоб, и это не обгон с нашей стороны,
+                # запрещаем левые повороты (на левый борт) до 120 градусов (Правила 14, 15, 17c)
+                if role in (VesselRole.GIVE_WAY, VesselRole.BOTH_GIVE_WAY) and encounter_sector != "own_overtaking":
+                    for angle_diff in range(1, 121):
+                        blocked_heading = int(round(own.course - angle_diff)) % 360
+                        tgt_forbidden[blocked_heading] = True
+            else:
+                # В ограниченной видимости (Правило 19 d):
+                if role in (VesselRole.GIVE_WAY, VesselRole.BOTH_GIVE_WAY):
+                    is_ahead_of_beam = (rb_own <= 90 or rb_own >= 270)
+                    is_we_overtaking = (112.5 <= rb_tgt <= 247.5)
+                    if is_ahead_of_beam:
+                        if not is_we_overtaking:
+                            # Избегать изменения курса влево: запрещаем повороты влево
+                            for angle_diff in range(1, 121):
+                                blocked_heading = int(round(own.course - angle_diff)) % 360
+                                tgt_forbidden[blocked_heading] = True
+                    else:
+                        # Судно на траверзе или позади него
+                        is_target_starboard = (90 < rb_own <= 180)
+                        if is_target_starboard:
+                            # Избегать изменения курса вправо (в сторону судна)
+                            for angle_diff in range(1, 121):
+                                blocked_heading = int(round(own.course + angle_diff)) % 360
+                                tgt_forbidden[blocked_heading] = True
+                        else:
+                            # Избегать изменения курса влево (в сторону судна)
+                            for angle_diff in range(1, 121):
+                                blocked_heading = int(round(own.course - angle_diff)) % 360
+                                tgt_forbidden[blocked_heading] = True
+                                
+            for h in range(360):
+                unified_forbidden_headings[h] = unified_forbidden_headings[h] or tgt_forbidden[h]
+                
+        # 2. Если опасности нет вообще
+        if not active_risks:
+            return Decision(
+                collision_risk=False,
+                own_role=VesselRole.N_A,
+                recommended_action=Action.N_A,
+                recommended_heading=own.course,
+                forbidden_sectors=convert_boolean_array_to_sectors(unified_forbidden_headings),
+                target_decisions=target_decisions,
+                explanation=general_explanation + ["Все цели расходятся безопасно."]
+            )
+
+        # 3. Принятие общего решения на основе объединенных секторов опасных курсов
+        # Определяем, обязаны ли мы маневрировать хотя бы из-за одной цели
+        own_must_act = any(
+            dec.own_role in (VesselRole.GIVE_WAY, VesselRole.BOTH_GIVE_WAY)
+            for dec in target_decisions.values()
+        )
+        
+        current_heading_idx = int(round(own.course)) % 360
+        is_current_heading_forbidden = unified_forbidden_headings[current_heading_idx]
+        
+        # Если мы Stand-on для всех и текущий курс безопасен -> просто сохраняем его
+        if not own_must_act and not is_current_heading_forbidden:
             return Decision(
                 collision_risk=True,
-                encounter_type="HEAD_ON",
-                own_role=VesselRole.BOTH_GIVE_WAY,
-                recommended_action=Action.ALTER_COURSE_STARBOARD,
-                explanation=explanation
+                own_role=VesselRole.STAND_ON,
+                recommended_action=Action.KEEP_COURSE_SPEED,
+                recommended_heading=own.course,
+                forbidden_sectors=convert_boolean_array_to_sectors(unified_forbidden_headings),
+                target_decisions=target_decisions,
+                explanation=general_explanation + ["Наше судно сохраняет курс и скорость (Stand-on для всех активных угроз)."]
             )
             
-        if is_crossing:
-            if encounter_sector == "crossing_starboard":
-                explanation.append("  -> Ситуация пересечения курсов (Правило 15).")
-                explanation.append("  -> Цель находится с нашего правого борта. Наше судно должно уступить дорогу.")
-                explanation.append("  -> Согласно Правилу 15 и 16, мы должны предпринять своевременный маневр и избегать пересечения курса цели по носу.")
-                return Decision(
-                    collision_risk=True,
-                    encounter_type="CROSSING_GIVE_WAY",
-                    own_role=VesselRole.GIVE_WAY,
-                    recommended_action=Action.ALTER_COURSE_STARBOARD,
-                    explanation=explanation
-                )
-            elif encounter_sector == "crossing_port":
-                explanation.append("  -> Ситуация пересечения курсов (Правило 15).")
-                explanation.append("  -> Цель находится с нашего левого борта. Мы имеем преимущество.")
-                explanation.append("  -> Согласно Правилу 17 (а)(i), наше судно должно сохранять курс и скорость.")
-                return Decision(
-                    collision_risk=True,
-                    encounter_type="CROSSING_STAND_ON",
-                    own_role=VesselRole.STAND_ON,
-                    recommended_action=Action.KEEP_COURSE_SPEED,
-                    explanation=explanation
-                )
+        # Иначе мы обязаны изменить курс
+        # Ищем первый безопасный курс вправо и влево
+        safe_stbd_heading = None
+        safe_stbd_angle = 360.0
+        
+        safe_port_heading = None
+        safe_port_angle = 360.0
+        
+        # Поиск вправо (по часовой стрелке)
+        for delta in range(1, 180):
+            heading = (current_heading_idx + delta) % 360
+            if not unified_forbidden_headings[heading]:
+                safe_stbd_heading = float(heading)
+                safe_stbd_angle = float(delta)
+                break
+                
+        # Поиск влево (против часовой стрелки)
+        for delta in range(1, 180):
+            heading = (current_heading_idx - delta) % 360
+            if not unified_forbidden_headings[heading]:
+                safe_port_heading = float(heading)
+                safe_port_angle = float(delta)
+                break
 
-        # Фолбэк на случай неопределенной геометрии
-        explanation.append("  -> [ВНИМАНИЕ] Нестандартная геометрия сближения.")
-        explanation.append("  Рекомендуется изменить курс вправо в соответствии с хорошей морской практикой (Правило 2).")
+        recommended_heading = None
+        recommended_action = Action.N_A
+        decision_notes = []
+        
+        # МППСС-72 строго рекомендует повороты вправо. Выбираем правый борт, если угол поворота приемлемый (<= 110 градусов)
+        if safe_stbd_heading is not None and safe_stbd_angle <= 110.0:
+            recommended_heading = safe_stbd_heading
+            recommended_action = Action.ALTER_COURSE_STARBOARD
+            decision_notes.append(f"Рекомендован поворот вправо на курс {recommended_heading:.1f}° (изменение на +{safe_stbd_angle:.1f}°).")
+        # Если правый поворот слишком велик, но левый поворот меньше и существует
+        elif safe_port_heading is not None:
+            recommended_heading = safe_port_heading
+            recommended_action = Action.ALTER_COURSE_PORT
+            decision_notes.append(f"Рекомендован поворот влево на курс {recommended_heading:.1f}° (изменение на -{safe_port_angle:.1f}°).")
+            decision_notes.append("ВНИМАНИЕ: Поворот влево противоречит стандартным предпочтениям МППСС, выполняйте его с осторожностью!")
+        # Если правый поворот существует, но он велик, а левого нет
+        elif safe_stbd_heading is not None:
+            recommended_heading = safe_stbd_heading
+            recommended_action = Action.ALTER_COURSE_STARBOARD
+            decision_notes.append(f"Рекомендован глубокий поворот вправо на курс {recommended_heading:.1f}° (изменение на +{safe_stbd_angle:.1f}°).")
+        else:
+            # Безопасных курсов нет!
+            recommended_heading = None
+            recommended_action = Action.REDUCE_SPEED_OR_STOP
+            decision_notes.append("КРИТИЧЕСКАЯ СИТУАЦИЯ: Все сектора курсов перекрыты опасностями!")
+            decision_notes.append("Рекомендуется НЕМЕДЛЕННО снизить ход, остановиться или дать задний ход (Правило 8 (e)).")
+
+        # 4. Проверка физических ограничений (радиус циркуляции)
+        maneuver_possible = True
+        if recommended_heading is not None:
+            delta_angle = min(abs(recommended_heading - own.course) % 360, 360 - (abs(recommended_heading - own.course) % 360))
+            
+            # Проверяем для ближайшей цели (с которой наименьший TCPA)
+            is_possible = is_turn_possible(own.speed, own.min_turning_radius, delta_angle, closest_tcpa)
+            if not is_possible:
+                maneuver_possible = False
+                decision_notes.append(
+                    f"[ФИЗИЧЕСКОЕ ОГРАНИЧЕНИЕ] Наше судно имеет радиус циркуляции {own.min_turning_radius} миль. "
+                    f"На скорости {own.speed} уз. мы не успеем довернуть на {delta_angle:.1f}° до достижения CPA "
+                    f"ближайшей цели {closest_target_name} ({closest_tcpa*60:.1f} мин)!"
+                )
+                decision_notes.append("РЕКОМЕНДАЦИЯ: Совместите поворот с экстренным снижением скорости для уменьшения радиуса циркуляции.")
+
+        # Формируем объяснение
+        explanation = general_explanation + ["-" * 40]
+        
+        # Добавляем индивидуальные выводы по целям
+        for name, dec in target_decisions.items():
+            if dec.collision_risk:
+                explanation.extend(dec.explanation)
+                explanation.append("")
+                
+        explanation.append("-" * 40)
+        explanation.append("ОБЩЕЕ РЕШЕНИЕ:")
+        explanation.extend(decision_notes)
+        
+        # Секторы
+        forbidden_sectors = convert_boolean_array_to_sectors(unified_forbidden_headings)
+        sectors_desc = []
+        for start, end in forbidden_sectors:
+            sectors_desc.append(f"{start:.0f}°-{end:.0f}°")
+        explanation.append(f"Объединенные опасные сектора курсов: {', '.join(sectors_desc) if sectors_desc else 'нет'}")
+        
         return Decision(
             collision_risk=True,
-            encounter_type="UNKNOWN_ENCOUNTER",
-            own_role=VesselRole.GIVE_WAY,
-            recommended_action=Action.ALTER_COURSE_STARBOARD,
+            own_role=VesselRole.GIVE_WAY if own_must_act else VesselRole.STAND_ON,
+            recommended_action=recommended_action,
+            recommended_heading=recommended_heading,
+            forbidden_sectors=forbidden_sectors,
+            target_decisions=target_decisions,
+            maneuver_possible=maneuver_possible,
             explanation=explanation
         )

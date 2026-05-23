@@ -83,9 +83,10 @@ def evaluate_sailing_vessels_rule12(own: Vessel, target: Vessel, wind_dir: float
     own_wind_rel = (wind_dir - own.course) % 360
     tgt_wind_rel = (wind_dir - target.course) % 360
     
-    # True = правый галс (ветер слева), False = левый галс (ветер справа)
-    own_starboard_tack = (180 <= own_wind_rel <= 360)
-    tgt_starboard_tack = (180 <= tgt_wind_rel <= 360)
+    # В МППСС-72: судно с ветром на левом борту (левый галс, 180..360) уступает судну с ветром на правом борту (правый галс, 0..180).
+    # True = правый галс (ветер справа, 0..180), False = левый галс (ветер слева, 180..360)
+    own_starboard_tack = (0 <= own_wind_rel < 180)
+    tgt_starboard_tack = (0 <= tgt_wind_rel < 180)
     
     explanation = [
         "Правило 12 (Парусные суда): Оба судна идут под парусом.",
