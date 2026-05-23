@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель предупреждения столкновений судов</title>
+    <!-- Подключаем современный шрифт Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Подключаем Paho MQTT клиент через CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(17, 24, 39, 0.7);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent-color: #3b82f6;
+            --accent-hover: #2563eb;
+            --danger-color: #ef4444;
+            --danger-glow: rgba(239, 68, 68, 0.4);
+            --safe-color: #10b981;
+            --safe-glow: rgba(16, 185, 129, 0.4);
+            --warning-color: #f59e0b;
+            --warning-glow: rgba(245, 158, 11, 0.4);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 2rem;
+            background-color: rgba(17, 24, 39, 0.8);
+            border-bottom: 1px solid var(--border-color);
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            letter-spacing: -0.025em;
+        }
+
+        .mqtt-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            border: 1px solid var(--border-color);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--danger-color);
+            box-shadow: 0 0 8px var(--danger-color);
+            transition: all 0.3s ease;
+        }
+
+        .status-dot.connected {
+            background-color: var(--safe-color);
+            box-shadow: 0 0 8px var(--safe-color);
+        }
+
+        main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 450px;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            max-width: 1600px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .left-column {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .radar-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            padding: 1.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            flex-grow: 1;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        canvas {
+            background-color: #0d1321;
+            border-radius: 8px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+            max-width: 100%;
+            height: auto;
+        }
+
+        .right-column {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+            padding-right: 0.25rem;
+        }
+
+        /* Тонкий скроллбар */
+        .right-column::-webkit-scrollbar {
+            width: 6px;
+        }
+        .right-column::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .right-column::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+            border-left: 3px solid var(--accent-color);
+            padding-left: 0.5rem;
+        }
+
+        .presets-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+        }
+
+        .preset-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.825rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: left;
+        }
+
+        .preset-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--accent-color);
+            transform: translateY(-2px);
+        }
+
+        .preset-btn.active {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        select, input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.875rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        select:focus, input:focus {
+            border-color: var(--accent-color);
+        }
+
+        .range-slider {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .range-slider input[type="range"] {
+            flex-grow: 1;
+            accent-color: var(--accent-color);
+            height: 6px;
+            padding: 0;
+            background: rgba(255,255,255,0.1);
+            border: none;
+        }
+
+        .range-value {
+            font-size: 0.875rem;
+            font-weight: 600;
+            min-width: 45px;
+            text-align: right;
+        }
+
+        .decision-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .decision-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.75rem;
+        }
+
+        .status-badge {
+            font-size: 0.825rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 0.35rem 0.75rem;
+            border-radius: 4px;
+            border: 1px solid transparent;
+        }
+
+        .status-badge.risk {
+            background-color: rgba(239, 68, 68, 0.15);
+            border-color: var(--danger-color);
+            color: var(--danger-color);
+            box-shadow: 0 0 10px var(--danger-glow);
+        }
+
+        .status-badge.safe {
+            background-color: rgba(16, 185, 129, 0.15);
+            border-color: var(--safe-color);
+            color: var(--safe-color);
+            box-shadow: 0 0 10px var(--safe-glow);
+        }
+
+        .decision-metric {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .metric-label {
+            font-size: 0.825rem;
+            color: var(--text-secondary);
+        }
+
+        .metric-value {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .metric-value.highlight {
+            color: var(--accent-color);
+        }
+
+        .warning-box {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid var(--warning-color);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            color: var(--warning-color);
+            box-shadow: 0 0 12px var(--warning-glow);
+            font-size: 0.825rem;
+            font-weight: 500;
+        }
+
+        .warning-title {
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+        }
+
+        .explanations-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .explanations-list li {
+            font-size: 0.825rem;
+            line-height: 1.4;
+            color: var(--text-secondary);
+            padding-left: 1.25rem;
+            position: relative;
+        }
+
+        .explanations-list li::before {
+            content: "-";
+            position: absolute;
+            left: 0;
+            top: 0;
+            color: var(--accent-color);
+            font-weight: 700;
+        }
+
+        .explanations-list .header-item {
+            font-weight: 600;
+            color: var(--text-primary);
+            padding-left: 0;
+            margin-top: 0.5rem;
+        }
+
+        .explanations-list .header-item::before {
+            display: none;
+        }
+
+        .divider {
+            height: 1px;
+            background: var(--border-color);
+            margin: 0.5rem 0;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>МППСС-72 экспертная система предупреждения столкновений</h1>
+        <div class="mqtt-status">
+            <div id="statusDot" class="status-dot"></div>
+            <span id="statusText">Подключение к MQTT...</span>
+        </div>
+    </header>
+
+    <main>
+        <div class="left-column">
+            <div class="radar-card">
+                <canvas id="radarCanvas" width="600" height="600"></canvas>
+            </div>
+        </div>
+
+        <div class="right-column">
+            <!-- Пресеты -->
+            <div class="card">
+                <div class="card-title">Демонстрационные пресеты</div>
+                <div class="presets-grid">
+                    <button class="preset-btn active" id="preset1">
+                        Пресет 1:<br>многоцелевой конфликт
+                    </button>
+                    <button class="preset-btn" id="preset2">
+                        Пресет 2:<br>ограничение маневра
+                    </button>
+                    <button class="preset-btn" id="preset3">
+                        Пресет 3:<br>приоритеты судов
+                    </button>
+                    <button class="preset-btn" id="preset4">
+                        Пресет 4:<br>ограниченная видимость
+                    </button>
+                </div>
+            </div>
+
+            <!-- Решение экспертной системы -->
+            <div class="card">
+                <div class="card-title">Вывод экспертной системы</div>
+                <div class="decision-panel">
+                    <div class="decision-header">
+                        <span class="metric-label">Риск столкновения:</span>
+                        <span id="riskBadge" class="status-badge safe">безопасно</span>
+                    </div>
+                    
+                    <div class="decision-metric">
+                        <span class="metric-label">Роль судна:</span>
+                        <span id="vesselRoleText" class="metric-value">не применимо</span>
+                    </div>
+
+                    <div class="decision-metric">
+                        <span class="metric-label">Рекомендуемое действие:</span>
+                        <span id="actionText" class="metric-value">особых маневров не требуется</span>
+                    </div>
+
+                    <div class="decision-metric">
+                        <span class="metric-label">Рекомендованный курс:</span>
+                        <span id="headingText" class="metric-value highlight">--</span>
+                    </div>
+
+                    <!-- Блок предупреждения при маневренных ограничениях -->
+                    <div id="warningBox" class="warning-box" style="display: none;">
+                        <span class="warning-title">Физическое ограничение</span>
+                        <span id="warningMessage">Судно не успеет завершить маневр до момента кратчайшего сближения.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Настройки собственного судна -->
+            <div class="card">
+                <div class="card-title">Параметры нашего судна</div>
+                
+                <div class="form-group">
+                    <label>Тип судна</label>
+                    <select id="ownType" onchange="publishCurrentState()">
+                        <option value="POWER_DRIVEN">судно с механическим двигателем</option>
+                        <option value="SAILING">парусное судно</option>
+                        <option value="FISHING">судно, занятое ловом рыбы</option>
+                        <option value="CBD">судно, стесненное своей осадкой</option>
+                        <option value="RAM">судно, ограниченное в возможности маневрировать</option>
+                        <option value="NUC">судно, лишенное возможности управляться</option>
+                    </select>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Скорость (узлы)</label>
+                        <div class="range-slider">
+                            <input type="range" id="ownSpeed" min="0" max="30" step="1" value="12" oninput="updateSliderValue(this); publishCurrentState()">
+                            <span class="range-value" id="ownSpeed_val">12 уз.</span>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Текущий курс (°)</label>
+                        <div class="range-slider">
+                            <input type="range" id="ownCourse" min="0" max="359" step="1" value="0" oninput="updateSliderValue(this); publishCurrentState()">
+                            <span class="range-value" id="ownCourse_val">0°</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Радиус циркуляции (миль)</label>
+                        <div class="range-slider">
+                            <input type="range" id="ownRadius" min="0.1" max="2.0" step="0.05" value="0.25" oninput="updateSliderValue(this); publishCurrentState()">
+                            <span class="range-value" id="ownRadius_val">0.25м</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Видимость</label>
+                        <select id="envVisibility" onchange="publishCurrentState()">
+                            <option value="GOOD">хорошая видимость</option>
+                            <option value="RESTRICTED">ограниченная видимость</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group" id="windGroup" style="display: none;">
+                    <label>Направление ветра (°)</label>
+                    <div class="range-slider">
+                        <input type="range" id="windDir" min="0" max="359" step="1" value="0" oninput="updateSliderValue(this); publishCurrentState()">
+                        <span class="range-value" id="windDir_val">0°</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Логическое обоснование -->
+            <div class="card">
+                <div class="card-title">Подробное обоснование решения</div>
+                <ul id="explanationsList" class="explanations-list">
+                    <li class="header-item">Ожидание данных от экспертного узла...</li>
+                </ul>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Глобальные переменные MQTT
+        const MQTT_BROKER = "localhost";
+        const MQTT_PORT = 9001; // WebSocket порт брокера
+        const MQTT_TOPIC_COMMAND = "colreg/expert/command";
+        const MQTT_TOPIC_RESULT = "colreg/expert/result";
+        
+        let mqttClient = null;
+        let activePreset = "preset1";
+        
+        // Временное хранилище текущих целей (для отрисовки на радаре)
+        let currentTargets = [];
+        let ownShipData = { course: 0, speed: 12 };
+        let forbiddenSectors = [];
+        let recommendedHeading = null;
+
+        // Определения пресетов сценариев
+        const presets = {
+            preset1: {
+                visibility: "GOOD",
+                own: {
+                    vessel_type: "POWER_DRIVEN",
+                    speed: 12,
+                    course: 0,
+                    min_turning_radius: 0.25
+                },
+                targets: [
+                    {
+                        name: "TargetA",
+                        x: 1.2,
+                        y: 1.2,
+                        course: 270,
+                        speed: 10,
+                        vessel_type: "POWER_DRIVEN"
+                    },
+                    {
+                        name: "TargetB",
+                        x: 0.0,
+                        y: 2.5,
+                        course: 180,
+                        speed: 10,
+                        vessel_type: "POWER_DRIVEN"
+                    }
+                ],
+                wind_direction: null
+            },
+            preset2: {
+                visibility: "GOOD",
+                own: {
+                    vessel_type: "POWER_DRIVEN",
+                    speed: 20,
+                    course: 0,
+                    min_turning_radius: 0.8
+                },
+                targets: [
+                    {
+                        name: "TargetShip_close",
+                        x: 0.0,
+                        y: 0.3,
+                        course: 180,
+                        speed: 10,
+                        vessel_type: "POWER_DRIVEN"
+                    }
+                ],
+                wind_direction: null
+            },
+            preset3: {
+                visibility: "GOOD",
+                own: {
+                    vessel_type: "POWER_DRIVEN",
+                    speed: 12,
+                    course: 0,
+                    min_turning_radius: 0.25
+                },
+                targets: [
+                    {
+                        name: "TargetSail",
+                        x: -1.0,
+                        y: 1.0,
+                        course: 90,
+                        speed: 6,
+                        vessel_type: "SAILING"
+                    },
+                    {
+                        name: "TargetFish",
+                        x: 1.0,
+                        y: 1.0,
+                        course: 270,
+                        speed: 6,
+                        vessel_type: "FISHING"
+                    }
+                ],
+                wind_direction: null
+            },
+            preset4: {
+                visibility: "RESTRICTED",
+                own: {
+                    vessel_type: "POWER_DRIVEN",
+                    speed: 12,
+                    course: 0,
+                    min_turning_radius: 0.25
+                },
+                targets: [
+                    {
+                        name: "TargetA_ahead",
+                        x: 1.0,
+                        y: 1.0,
+                        course: 270,
+                        speed: 10,
+                        vessel_type: "POWER_DRIVEN"
+                    },
+                    {
+                        name: "TargetB_abaft",
+                        x: -1.0,
+                        y: -0.5,
+                        course: 45,
+                        speed: 8,
+                        vessel_type: "POWER_DRIVEN"
+                    }
+                ],
+                wind_direction: null
+            }
+        };
+
+        // Локализованные описания значений
+        const rolesRu = {
+            "STAND_ON": "судно, которому уступают дорогу",
+            "GIVE_WAY": "судно, уступающее дорогу",
+            "BOTH": "оба судна обязаны изменить курс",
+            "N_A": "не применимо"
+        };
+
+        const actionsRu = {
+            "KEEP_COURSE_SPEED": "сохранять курс и скорость",
+            "ALTER_COURSE_STARBOARD": "изменить курс вправо (на правый борт)",
+            "ALTER_COURSE_PORT": "изменить курс влево (на левый борт)",
+            "REDUCE_SPEED_OR_STOP": "уменьшить ход или остановиться",
+            "N_A": "особых маневров не требуется"
+        };
+
+        // Инициализация интерфейса
+        window.addEventListener('DOMContentLoaded', () => {
+            initRadar();
+            setupPresetListeners();
+            connectMQTT();
+        });
+
+        // Функция обновления отображения слайдеров
+        function updateSliderValue(slider) {
+            const valSpan = document.getElementById(slider.id + "_val");
+            if (slider.id === "ownSpeed" || slider.id.startsWith("tgtSpeed")) {
+                valSpan.textContent = slider.value + " уз.";
+            } else if (slider.id === "ownRadius") {
+                valSpan.textContent = slider.value + "м";
+            } else {
+                valSpan.textContent = slider.value + "°";
+            }
+        }
+
+        // Настройка обработчиков пресетов
+        function setupPresetListeners() {
+            const btns = ["preset1", "preset2", "preset3", "preset4"];
+            btns.forEach(id => {
+                document.getElementById(id).addEventListener('click', () => {
+                    btns.forEach(b => document.getElementById(b).classList.remove('active'));
+                    document.getElementById(id).classList.add('active');
+                    activePreset = id;
+                    applyPreset(id);
+                });
+            });
+        }
+
+        // Применить параметры пресета к интерфейсу
+        function applyPreset(presetId) {
+            const data = presets[presetId];
+            
+            // Наш тип судна и параметры
+            document.getElementById("ownType").value = data.own.vessel_type;
+            
+            const speedSlider = document.getElementById("ownSpeed");
+            speedSlider.value = data.own.speed;
+            updateSliderValue(speedSlider);
+            
+            const courseSlider = document.getElementById("ownCourse");
+            courseSlider.value = data.own.course;
+            updateSliderValue(courseSlider);
+            
+            const radiusSlider = document.getElementById("ownRadius");
+            radiusSlider.value = data.own.min_turning_radius;
+            updateSliderValue(radiusSlider);
+
+            document.getElementById("envVisibility").value = data.visibility;
+            
+            // Если есть парусные суда, показываем управление ветром
+            const hasSailing = data.own.vessel_type === "SAILING" || data.targets.some(t => t.vessel_type === "SAILING");
+            const windGroup = document.getElementById("windGroup");
+            if (hasSailing) {
+                windGroup.style.display = "block";
+                const windSlider = document.getElementById("windDir");
+                windSlider.value = data.wind_direction !== null ? data.wind_direction : 0;
+                updateSliderValue(windSlider);
+            } else {
+                windGroup.style.display = "none";
+            }
+            
+            currentTargets = JSON.parse(JSON.stringify(data.targets));
+            
+            publishCurrentState();
+        }
+
+        // Подключение к брокеру MQTT по WebSocket
+        function connectMQTT() {
+            const statusDot = document.getElementById("statusDot");
+            const statusText = document.getElementById("statusText");
+            
+            const clientId = "web_nav_client_" + Math.random().toString(16).substr(2, 8);
+            mqttClient = new Paho.MQTT.Client(MQTT_BROKER, MQTT_PORT, clientId);
+            
+            mqttClient.onConnectionLost = (responseObject) => {
+                statusDot.className = "status-dot";
+                statusText.textContent = "Сбой подключения к MQTT-брокеру";
+                if (responseObject.errorCode !== 0) {
+                    console.log("MQTT Connection Lost: " + responseObject.errorMessage);
+                }
+                // Повторная попытка подключения через 3 секунды
+                setTimeout(connectMQTT, 3000);
+            };
+            
+            mqttClient.onMessageArrived = (message) => {
+                if (message.destinationName === MQTT_TOPIC_RESULT) {
+                    try {
+                        const payload = JSON.parse(message.payloadString);
+                        handleCalculationResult(payload);
+                    } catch (e) {
+                        console.error("Ошибка парсинга ответа MQTT:", e);
+                    }
+                }
+            };
+            
+            mqttClient.connect({
+                onSuccess: () => {
+                    statusDot.className = "status-dot connected";
+                    statusText.textContent = `Подключено к MQTT (${MQTT_BROKER}:${MQTT_PORT})`;
+                    mqttClient.subscribe(MQTT_TOPIC_RESULT);
+                    
+                    // Загружаем первый пресет при старте
+                    applyPreset("preset1");
+                },
+                onFailure: (message) => {
+                    statusDot.className = "status-dot";
+                    statusText.textContent = "Не удалось подключиться к MQTT";
+                    console.log("MQTT Connection Failed: " + message.errorMessage);
+                    setTimeout(connectMQTT, 3000);
+                },
+                keepAliveInterval: 30,
+                cleanSession: true
+            });
+        }
+
+        // Сбор текущих параметров из формы и отправка в MQTT топик
+        function publishCurrentState() {
+            if (!mqttClient || !mqttClient.isConnected()) return;
+
+            const ownType = document.getElementById("ownType").value;
+            const ownSpeed = parseFloat(document.getElementById("ownSpeed").value);
+            const ownCourse = parseFloat(document.getElementById("ownCourse").value);
+            const ownRadius = parseFloat(document.getElementById("ownRadius").value);
+            const visibility = document.getElementById("envVisibility").value;
+            
+            ownShipData = { course: ownCourse, speed: ownSpeed };
+
+            // Показываем/скрываем ветер в зависимости от наличия парусников
+            const hasSailing = ownType === "SAILING" || currentTargets.some(t => t.vessel_type === "SAILING");
+            const windGroup = document.getElementById("windGroup");
+            let windDir = null;
+            if (hasSailing) {
+                windGroup.style.display = "block";
+                windDir = parseFloat(document.getElementById("windDir").value);
+            } else {
+                windGroup.style.display = "none";
+            }
+
+            const command = {
+                request_id: "web-req-" + Date.now(),
+                action: "evaluate",
+                own_ship: {
+                    name: "OwnShip",
+                    x: 0.0,
+                    y: 0.0,
+                    course: ownCourse,
+                    speed: ownSpeed,
+                    vessel_type: ownType,
+                    min_turning_radius: ownRadius
+                },
+                targets: currentTargets,
+                environment: {
+                    visibility: visibility,
+                    in_narrow_channel: false,
+                    in_tss: false
+                },
+                wind_direction: windDir
+            };
+
+            const msg = new Paho.MQTT.Message(JSON.stringify(command));
+            msg.destinationName = MQTT_TOPIC_COMMAND;
+            mqttClient.send(msg);
+        }
+
+        // Обработка ответа от экспертной системы
+        function handleCalculationResult(payload) {
+            // Обновляем текстовые индикаторы
+            const riskBadge = document.getElementById("riskBadge");
+            if (payload.collision_risk) {
+                riskBadge.textContent = "опасность столкновения!";
+                riskBadge.className = "status-badge risk";
+            } else {
+                riskBadge.textContent = "безопасно";
+                riskBadge.className = "status-badge safe";
+            }
+
+            document.getElementById("vesselRoleText").textContent = rolesRu[payload.own_role] || payload.own_role;
+            document.getElementById("actionText").textContent = actionsRu[payload.recommended_action] || payload.recommended_action;
+            
+            const headingText = document.getElementById("headingText");
+            if (payload.recommended_heading !== null && payload.recommended_heading !== undefined) {
+                headingText.textContent = parseFloat(payload.recommended_heading).toFixed(1) + "°";
+                recommendedHeading = parseFloat(payload.recommended_heading);
+            } else {
+                headingText.textContent = "--";
+                recommendedHeading = null;
+            }
+
+            // Маневренные ограничения
+            const warningBox = document.getElementById("warningBox");
+            if (payload.maneuver_possible === false) {
+                warningBox.style.display = "flex";
+            } else {
+                warningBox.style.display = "none";
+            }
+
+            // Запрещенные сектора
+            forbiddenSectors = payload.forbidden_sectors || [];
+
+            // Список объяснений
+            const explanationsList = document.getElementById("explanationsList");
+            explanationsList.innerHTML = "";
+
+            if (payload.explanation && payload.explanation.length > 0) {
+                payload.explanation.forEach(line => {
+                    const li = document.createElement("li");
+                    
+                    // Если строка является разделителем или заголовком
+                    if (line.startsWith("---") || line.trim() === "") return;
+                    
+                    if (line.includes("оценка расхождения") || line === "статус окружающей обстановки:" || line === "общее решение:") {
+                        li.className = "header-item";
+                        li.textContent = line;
+                    } else {
+                        // Убираем дефис, если он уже есть в строке
+                        let cleanLine = line.trim();
+                        if (cleanLine.startsWith("-")) {
+                            cleanLine = cleanLine.substring(1).trim();
+                        }
+                        li.textContent = cleanLine;
+                    }
+                    explanationsList.appendChild(li);
+                });
+            } else {
+                const li = document.createElement("li");
+                li.className = "header-item";
+                li.textContent = "Нет подробного вывода.";
+                explanationsList.appendChild(li);
+            }
+
+            // Обновляем визуализацию радара
+            drawRadar();
+        }
+
+        // РАДАРНАЯ ВИЗУАЛИЗАЦИЯ (HTML5 Canvas)
+        let canvas = null;
+        let ctx = null;
+        const scale = 120; // 1 миля = 120 пикселей
+
+        function initRadar() {
+            canvas = document.getElementById("radarCanvas");
+            ctx = canvas.getContext("2d");
+            drawRadar();
+        }
+
+        function drawRadar() {
+            if (!ctx) return;
+
+            const w = canvas.width;
+            const h = canvas.height;
+            const cx = w / 2;
+            const cy = h / 2;
+
+            // Очищаем экран
+            ctx.fillStyle = "#090d16";
+            ctx.fillRect(0, 0, w, h);
+
+            // Отрисовка концентрических колец (радарная сетка)
+            ctx.strokeStyle = "rgba(16, 185, 129, 0.15)";
+            ctx.lineWidth = 1;
+            
+            const rings = [0.5, 1.0, 1.5, 2.0, 2.5];
+            rings.forEach(r => {
+                ctx.beginPath();
+                ctx.arc(cx, cy, r * scale, 0, 2 * Math.PI);
+                ctx.stroke();
+                
+                // Подписи колец
+                ctx.fillStyle = "rgba(16, 185, 129, 0.4)";
+                ctx.font = "10px sans-serif";
+                ctx.fillText(r + " NM", cx + 5, cy - r * scale + 12);
+            });
+
+            // Направляющие линии пеленгов
+            ctx.strokeStyle = "rgba(16, 185, 129, 0.1)";
+            for (let angle = 0; angle < 360; angle += 30) {
+                const rad = (angle - 90) * Math.PI / 180;
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(cx + Math.cos(rad) * 2.5 * scale, cy + Math.sin(rad) * 2.5 * scale);
+                ctx.stroke();
+            }
+
+            // Подписи сторон света
+            ctx.fillStyle = "rgba(16, 185, 129, 0.6)";
+            ctx.font = "bold 12px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("N", cx, cy - 2.5 * scale - 15);
+            ctx.fillText("S", cx, cy + 2.5 * scale + 15);
+            ctx.fillText("E", cx + 2.5 * scale + 15, cy);
+            ctx.fillText("W", cx - 2.5 * scale - 15, cy);
+
+            // ОТРИСОВКА ЗАПРЕЩЕННЫХ СЕКТОРОВ КУРСА
+            forbiddenSectors.forEach(sector => {
+                const startDeg = sector[0];
+                const endDeg = sector[1];
+
+                // В МППСС-72 курс идет от 0 (север) по часовой стрелке.
+                // В Canvas радианы идут от оси X (восток) по часовой стрелке.
+                // Переводим: canvas_angle = (course - 90) * PI / 180
+                const startRad = (startDeg - 90) * Math.PI / 180;
+                const endRad = (endDeg - 90) * Math.PI / 180;
+
+                ctx.fillStyle = "rgba(239, 68, 68, 0.22)";
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                // Отрисовываем дугу сектора
+                ctx.arc(cx, cy, 2.0 * scale, startRad, endRad);
+                ctx.lineTo(cx, cy);
+                ctx.fill();
+            });
+
+            // СОБСТВЕННОЕ СУДНО (Own Ship)
+            // Рисуем в центре
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = "#3b82f6";
+            
+            ctx.fillStyle = "#3b82f6";
+            ctx.beginPath();
+            ctx.arc(cx, cy, 6, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.shadowBlur = 0; // Сбрасываем тень
+
+            // Направление движения собственного судна
+            const ownCourseRad = (ownShipData.course - 90) * Math.PI / 180;
+            ctx.strokeStyle = "#3b82f6";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.cos(ownCourseRad) * 45, cy + Math.sin(ownCourseRad) * 45);
+            ctx.stroke();
+
+            // РЕКОМЕНДОВАННЫЙ НОВЫЙ КУРС
+            if (recommendedHeading !== null) {
+                const recRad = (recommendedHeading - 90) * Math.PI / 180;
+                ctx.strokeStyle = "#10b981";
+                ctx.lineWidth = 3;
+                ctx.setLineDash([5, 3]); // Пунктирная линия
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.lineTo(cx + Math.cos(recRad) * 80, cy + Math.sin(recRad) * 80);
+                ctx.stroke();
+                ctx.setLineDash([]); // Сброс пунктира
+
+                // Стрелочка на конце нового курса
+                ctx.fillStyle = "#10b981";
+                ctx.beginPath();
+                ctx.arc(cx + Math.cos(recRad) * 80, cy + Math.sin(recRad) * 80, 5, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+
+            // СУДА-ЦЕЛИ (Target Ships)
+            currentTargets.forEach(tgt => {
+                // Координаты X и Y. Восток — вправо (+x), Север — вверх (+y).
+                // В Canvas Y идет вниз, поэтому: canvas_y = cy - y * scale
+                const tx = cx + tgt.x * scale;
+                const ty = cy - tgt.y * scale;
+
+                // Рисуем точку положения судна
+                ctx.fillStyle = "#f59e0b";
+                ctx.beginPath();
+                ctx.arc(tx, ty, 6, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // Вектор движения цели
+                const tgtCourseRad = (tgt.course - 90) * Math.PI / 180;
+                ctx.strokeStyle = "#f59e0b";
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(tx, ty);
+                // Длина вектора пропорциональна скорости (например, speed * 2)
+                const vectorLen = Math.max(20, tgt.speed * 2.5);
+                ctx.lineTo(tx + Math.cos(tgtCourseRad) * vectorLen, ty + Math.sin(tgtCourseRad) * vectorLen);
+                ctx.stroke();
+
+                // Подпись имени судна
+                ctx.fillStyle = "#9ca3af";
+                ctx.font = "500 11px 'Inter'";
+                ctx.textAlign = "left";
+                ctx.fillText(tgt.name, tx + 10, ty + 2);
+            });
+        }
+    </script>
+</body>
+</html>
