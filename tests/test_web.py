@@ -17,7 +17,7 @@ class TestWebDashboard(unittest.TestCase):
     def setUpClass(cls):
         cls.managed_processes = []
 
-        # 1. Start MQTT Broker if not running on standard ports
+        # 1. Запуск MQTT-брокера, если он не запущен на стандартных портах
         if not is_port_open(1883) and not is_port_open(9001):
             print("Starting MQTT Broker...")
             broker = subprocess.Popen(
@@ -29,7 +29,7 @@ class TestWebDashboard(unittest.TestCase):
             cls.managed_processes.append(broker)
             time.sleep(2.0)
 
-        # 2. Start Expert Node if not running
+        # 2. Запуск экспертного узла, если он не запущен
         try:
             subprocess.check_output(["pgrep", "-f", "mqtt_node.py"])
             node_running = True
@@ -45,7 +45,7 @@ class TestWebDashboard(unittest.TestCase):
             cls.managed_processes.append(node)
             time.sleep(1.0)
 
-        # 3. Start HTTP Server if not running
+        # 3. Запуск HTTP-сервера, если он не запущен
         if not is_port_open(8000):
             print("Starting HTTP Server...")
             server = subprocess.Popen(
@@ -57,18 +57,18 @@ class TestWebDashboard(unittest.TestCase):
             cls.managed_processes.append(server)
             time.sleep(1.0)
 
-        # 4. Open page in agent-browser
+        # 4. Открытие страницы в браузере
         print("Opening dashboard in browser...")
         subprocess.run(
             ["agent-browser", "open", "http://localhost:8000"],
             check=True,
             stdout=subprocess.DEVNULL,
         )
-        time.sleep(2.0)  # Wait for MQTT connection inside the browser page
+        time.sleep(2.0)  # Ожидание установления соединения MQTT на странице
 
     @classmethod
     def tearDownClass(cls):
-        # Stop all processes we started
+        # Остановка всех запущенных процессов
         for p in cls.managed_processes:
             try:
                 p.terminate()
@@ -97,10 +97,10 @@ class TestWebDashboard(unittest.TestCase):
 
     def _click_preset(self, num):
         self._eval_js(f'document.getElementById("preset{num}").click()')
-        time.sleep(0.8)  # wait for MQTT roundtrip
+        time.sleep(0.8)  # Ожидание завершения цикла приема-передачи сообщения
 
     def test_preset_1_multi_target(self):
-        """Test Preset 1: Multi-target collision risk."""
+        """Тестирование пресета 1: опасность столкновения с несколькими целями."""
         self._click_preset(1)
         state = self._eval_js(
             'JSON.stringify({risk: document.getElementById("riskBadge").textContent, role: document.getElementById("vesselRoleText").textContent, action: document.getElementById("actionText").textContent, heading: document.getElementById("headingText").textContent, warning: document.getElementById("warningBox").style.display})'
@@ -116,7 +116,7 @@ class TestWebDashboard(unittest.TestCase):
         self.assertEqual(state_dict["warning"], "none")
 
     def test_preset_2_maneuver_limit(self):
-        """Test Preset 2: Physical maneuverability limitation."""
+        """Тестирование пресета 2: физические ограничения маневренности."""
         self._click_preset(2)
         state = self._eval_js(
             'JSON.stringify({risk: document.getElementById("riskBadge").textContent, role: document.getElementById("vesselRoleText").textContent, action: document.getElementById("actionText").textContent, heading: document.getElementById("headingText").textContent, warning: document.getElementById("warningBox").style.display})'
@@ -132,7 +132,7 @@ class TestWebDashboard(unittest.TestCase):
         self.assertIn(state_dict["warning"], ["flex", "block"])
 
     def test_preset_3_priorities(self):
-        """Test Preset 3: Vessel priority hierarchy (Sailing & Fishing)."""
+        """Тестирование пресета 3: иерархия приоритетов судов."""
         self._click_preset(3)
         state = self._eval_js(
             'JSON.stringify({risk: document.getElementById("riskBadge").textContent, role: document.getElementById("vesselRoleText").textContent, action: document.getElementById("actionText").textContent, heading: document.getElementById("headingText").textContent, warning: document.getElementById("warningBox").style.display})'
@@ -148,7 +148,7 @@ class TestWebDashboard(unittest.TestCase):
         self.assertEqual(state_dict["warning"], "none")
 
     def test_preset_4_restricted_visibility(self):
-        """Test Preset 4: Restricted visibility encounter rules (Rule 19)."""
+        """Тестирование пресета 4: правила расхождения при ограниченной видимости."""
         self._click_preset(4)
         state = self._eval_js(
             'JSON.stringify({risk: document.getElementById("riskBadge").textContent, role: document.getElementById("vesselRoleText").textContent, action: document.getElementById("actionText").textContent, heading: document.getElementById("headingText").textContent, warning: document.getElementById("warningBox").style.display})'
@@ -164,11 +164,11 @@ class TestWebDashboard(unittest.TestCase):
         self.assertIn(state_dict["warning"], ["flex", "block"])
 
     def test_manual_interaction_priority(self):
-        """Test manually changing own vessel parameters and updating the UI state."""
-        # Click Preset 3 (priorities, good visibility)
+        """Тестирование ручного изменения параметров судна и обновления состояния."""
+        # Клик на пресет 3
         self._click_preset(3)
 
-        # Change own vessel type to NUC (highest priority) and speed to 2 knots
+        # Изменение типа собственного судна на судно, лишенное возможности управляться, и скорости на 2 узла
         self._eval_js(
             'document.getElementById("ownType").value = "NUC"; document.getElementById("ownType").dispatchEvent(new Event("change"));'
         )
@@ -182,7 +182,7 @@ class TestWebDashboard(unittest.TestCase):
         )
         state_dict = json.loads(state)
 
-        # We should now be the stand-on vessel
+        # Собственное судно должно получить статус судна, которому уступают дорогу
         self.assertEqual(state_dict["risk"], "опасность столкновения!")
         self.assertEqual(state_dict["role"], "судно, которому уступают дорогу")
 
