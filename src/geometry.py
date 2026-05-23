@@ -1,19 +1,23 @@
 import math
-from typing import Tuple, Optional, List
+from typing import List, Optional, Tuple
+
 from .models import Vessel
 
 # Константы для расчетов опасности
-SAFE_CPA_DISTANCE = 2.0     # безопасная дистанция кратчайшего сближения (в милях)
-CRITICAL_TCPA = 0.5          # критическое время сближения (в часах)
+SAFE_CPA_DISTANCE = 2.0  # безопасная дистанция кратчайшего сближения (в милях)
+CRITICAL_TCPA = 0.5  # критическое время сближения (в часах)
+
 
 def course_to_rad(course_deg: float) -> float:
     """Перевод морского курса (от 0 до 360, по часовой стрелке от Севера) в радианы."""
     return math.radians(course_deg)
 
+
 def rad_to_course(rad: float) -> float:
     """Перевод радианов в морской курс (от 0 до 360)."""
     deg = math.degrees(rad)
     return deg % 360
+
 
 def get_velocity_components(speed: float, course_deg: float) -> Tuple[float, float]:
     """Вычисляет компоненты скорости Vx, Vy по курсу и скорости."""
@@ -22,9 +26,11 @@ def get_velocity_components(speed: float, course_deg: float) -> Tuple[float, flo
     vy = speed * math.cos(rad)
     return vx, vy
 
+
 def calculate_distance(v1: Vessel, v2: Vessel) -> float:
     """Вычисляет расстояние между двумя судами в морских милях."""
-    return math.sqrt((v2.x - v1.x)**2 + (v2.y - v1.y)**2)
+    return math.sqrt((v2.x - v1.x) ** 2 + (v2.y - v1.y) ** 2)
+
 
 def calculate_true_bearing(from_vessel: Vessel, to_vessel: Vessel) -> float:
     """Вычисляет истинный пеленг на цель в градусах."""
@@ -32,6 +38,7 @@ def calculate_true_bearing(from_vessel: Vessel, to_vessel: Vessel) -> float:
     dy = to_vessel.y - from_vessel.y
     rad = math.atan2(dx, dy)
     return rad_to_course(rad)
+
 
 def calculate_relative_bearing(own: Vessel, target: Vessel) -> float:
     """
@@ -42,79 +49,92 @@ def calculate_relative_bearing(own: Vessel, target: Vessel) -> float:
     rb = (tb - own.course) % 360
     return rb
 
+
 def calculate_cpa_tcpa(own: Vessel, target: Vessel) -> Tuple[float, float]:
     """
     Вычисляет дистанцию кратчайшего сближения и время до кратчайшего сближения (в часах).
     """
     v_own_x, v_own_y = get_velocity_components(own.speed, own.course)
     v_tgt_x, v_tgt_y = get_velocity_components(target.speed, target.course)
-    
+
     v_rel_x = v_tgt_x - v_own_x
     v_rel_y = v_tgt_y - v_own_y
-    
+
     r_x = target.x - own.x
     r_y = target.y - own.y
-    
+
     v_rel_sq = v_rel_x**2 + v_rel_y**2
-    
+
     if v_rel_sq < 1e-6:
         current_dist = calculate_distance(own, target)
-        return current_dist, float('inf')
-    
-    tcpa = - (r_x * v_rel_x + r_y * v_rel_y) / v_rel_sq
-    
+        return current_dist, float("inf")
+
+    tcpa = -(r_x * v_rel_x + r_y * v_rel_y) / v_rel_sq
+
     cpa_x = r_x + v_rel_x * tcpa
     cpa_y = r_y + v_rel_y * tcpa
-    
+
     cpa_dist = math.sqrt(cpa_x**2 + cpa_y**2)
-    
+
     return cpa_dist, tcpa
 
-def is_collision_risk_exists(own: Vessel, target: Vessel) -> Tuple[bool, float, float, float]:
+
+def is_collision_risk_exists(
+    own: Vessel, target: Vessel
+) -> Tuple[bool, float, float, float]:
     """
     Определяет, существует ли опасность столкновения.
     Возвращает (risk_exists, current_distance, cpa_distance, tcpa_hours).
     """
     dist = calculate_distance(own, target)
     cpa, tcpa = calculate_cpa_tcpa(own, target)
-    
+
     if dist < SAFE_CPA_DISTANCE:
         risk = True
     elif tcpa > 0 and tcpa < CRITICAL_TCPA and cpa < SAFE_CPA_DISTANCE:
         risk = True
     else:
         risk = False
-        
+
     return risk, dist, cpa, tcpa
 
-def is_turn_possible(own_speed: float, min_turning_radius: float, delta_heading_deg: float, tcpa_hours: float) -> bool:
+
+def is_turn_possible(
+    own_speed: float,
+    min_turning_radius: float,
+    delta_heading_deg: float,
+    tcpa_hours: float,
+) -> bool:
     """
     Проверяет, успеет ли судно физически завершить поворот на delta_heading_deg
     до наступления момента кратчайшего сближения.
-    
+
     Длина дуги поворота S = R * alpha (в радианах).
     Время поворота T = S / V.
     """
-    if tcpa_hours <= 0 or tcpa_hours == float('inf'):
+    if tcpa_hours <= 0 or tcpa_hours == float("inf"):
         return True
-        
+
     alpha_rad = math.radians(abs(delta_heading_deg))
     turn_distance = min_turning_radius * alpha_rad  # в милях
-    
+
     if own_speed < 0.1:
         return True  # Стоим на месте
-        
+
     turn_time_hours = turn_distance / own_speed
     return turn_time_hours <= tcpa_hours
 
-def get_forbidden_headings_for_target(own: Vessel, target: Vessel, safe_dist: float = SAFE_CPA_DISTANCE) -> List[bool]:
+
+def get_forbidden_headings_for_target(
+    own: Vessel, target: Vessel, safe_dist: float = SAFE_CPA_DISTANCE
+) -> List[bool]:
     """
     Оценивает все 360 направлений курса собственного судна (при текущей скорости).
     Возвращает список из 360 булевых значений, где True означает, что данный курс
     является опасным.
     """
     forbidden = [False] * 360
-    
+
     # Создаем временный объект судна для симуляции
     temp_own = Vessel(
         name=own.name,
@@ -122,18 +142,19 @@ def get_forbidden_headings_for_target(own: Vessel, target: Vessel, safe_dist: fl
         y=own.y,
         course=own.course,
         speed=own.speed,
-        vessel_type=own.vessel_type
+        vessel_type=own.vessel_type,
     )
-    
+
     for heading in range(360):
         temp_own.course = float(heading)
         cpa, tcpa = calculate_cpa_tcpa(temp_own, target)
-        
+
         # Если при данном курсе возникает сближение ближе безопасного
         if tcpa > 0 and tcpa < CRITICAL_TCPA and cpa < safe_dist:
             forbidden[heading] = True
-            
+
     return forbidden
+
 
 def convert_boolean_array_to_sectors(array: List[bool]) -> List[Tuple[float, float]]:
     """
@@ -143,7 +164,7 @@ def convert_boolean_array_to_sectors(array: List[bool]) -> List[Tuple[float, flo
     sectors = []
     in_sector = False
     start = 0.0
-    
+
     for i in range(360):
         if array[i] and not in_sector:
             start = float(i)
@@ -151,7 +172,7 @@ def convert_boolean_array_to_sectors(array: List[bool]) -> List[Tuple[float, flo
         elif not array[i] and in_sector:
             sectors.append((start, float(i - 1)))
             in_sector = False
-            
+
     # Обработка перехода через 0
     if in_sector:
         if len(sectors) > 0 and sectors[0][0] == 0.0:
@@ -160,5 +181,5 @@ def convert_boolean_array_to_sectors(array: List[bool]) -> List[Tuple[float, flo
             sectors.append((start, first_sector[1]))
         else:
             sectors.append((start, 359.0))
-            
+
     return sectors
