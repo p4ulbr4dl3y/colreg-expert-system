@@ -14,19 +14,20 @@
 
     <style>
         :root {
-            --bg-color: #0b0f19;
-            --card-bg: rgba(17, 24, 39, 0.7);
-            --border-color: rgba(255, 255, 255, 0.08);
-            --text-primary: #f3f4f6;
-            --text-secondary: #9ca3af;
+            --bg-color: #080c14;
+            --card-bg: rgba(13, 17, 28, 0.75);
+            --border-color: rgba(255, 255, 255, 0.05);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
             --accent-color: #3b82f6;
-            --accent-hover: #2563eb;
+            --accent-hover: #1d4ed8;
             --danger-color: #ef4444;
-            --danger-glow: rgba(239, 68, 68, 0.4);
+            --danger-glow: rgba(239, 68, 68, 0.1);
             --safe-color: #10b981;
-            --safe-glow: rgba(16, 185, 129, 0.4);
+            --safe-glow: rgba(16, 185, 129, 0.1);
             --warning-color: #f59e0b;
-            --warning-glow: rgba(245, 158, 11, 0.4);
+            --warning-glow: rgba(245, 158, 11, 0.1);
+            --font-mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
         }
 
         * {
@@ -38,6 +39,7 @@
         body {
             font-family: 'Inter', sans-serif;
             background-color: var(--bg-color);
+            background-image: radial-gradient(at top, #0f172a, #080c14);
             color: var(--text-primary);
             min-height: 100vh;
             display: flex;
@@ -49,51 +51,51 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 1.5rem 2rem;
-            background-color: rgba(17, 24, 39, 0.8);
+            padding: 1.25rem 2rem;
+            background-color: rgba(9, 13, 22, 0.8);
             border-bottom: 1px solid var(--border-color);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(12px);
         }
 
         h1 {
-            font-size: 1.25rem;
-            font-weight: 600;
-            letter-spacing: -0.025em;
+            font-size: 1.125rem;
+            font-weight: 500;
+            letter-spacing: -0.01em;
+            color: #f8fafc;
         }
 
         .mqtt-status {
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            font-size: 0.875rem;
+            font-size: 0.8rem;
             font-weight: 500;
-            background: rgba(255, 255, 255, 0.05);
-            padding: 0.5rem 1rem;
-            border-radius: 9999px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 0.4rem 0.85rem;
+            border-radius: 6px;
             border: 1px solid var(--border-color);
         }
 
         .status-dot {
-            width: 8px;
-            height: 8px;
+            width: 6px;
+            height: 6px;
             border-radius: 50%;
             background-color: var(--danger-color);
-            box-shadow: 0 0 8px var(--danger-color);
             transition: all 0.3s ease;
         }
 
         .status-dot.connected {
             background-color: var(--safe-color);
-            box-shadow: 0 0 8px var(--safe-color);
+            box-shadow: 0 0 6px var(--safe-color);
         }
 
         main {
             flex: 1;
             display: grid;
-            grid-template-columns: 1fr 450px;
-            gap: 1.5rem;
-            padding: 1.5rem;
-            max-width: 1600px;
+            grid-template-columns: 1fr 440px;
+            gap: 1.25rem;
+            padding: 1.25rem;
+            max-width: 1500px;
             width: 100%;
             margin: 0 auto;
         }
@@ -101,27 +103,26 @@
         .left-column {
             display: flex;
             flex-direction: column;
-            gap: 1.5rem;
+            gap: 1.25rem;
         }
 
         .radar-card {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
-            border-radius: 12px;
-            backdrop-filter: blur(10px);
-            padding: 1.5rem;
+            border-radius: 8px;
+            backdrop-filter: blur(12px);
+            padding: 1rem;
             display: flex;
             justify-content: center;
             align-items: center;
             position: relative;
             flex-grow: 1;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
         }
 
         canvas {
-            background-color: #0d1321;
-            border-radius: 8px;
-            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+            background-color: #07090e;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.03);
             max-width: 100%;
             height: auto;
         }
@@ -129,104 +130,103 @@
         .right-column {
             display: flex;
             flex-direction: column;
-            gap: 1.5rem;
-            max-height: calc(100vh - 100px);
+            gap: 1.25rem;
+            max-height: calc(100vh - 90px);
             overflow-y: auto;
             padding-right: 0.25rem;
         }
 
-        /* Тонкий скроллбар */
         .right-column::-webkit-scrollbar {
-            width: 6px;
+            width: 4px;
         }
         .right-column::-webkit-scrollbar-track {
             background: transparent;
         }
         .right-column::-webkit-scrollbar-thumb {
-            background: rgba(255,255,255,0.1);
-            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 2px;
         }
 
         .card {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
-            border-radius: 12px;
-            backdrop-filter: blur(10px);
-            padding: 1.5rem;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            backdrop-filter: blur(12px);
+            padding: 1.25rem;
         }
 
         .card-title {
-            font-size: 1rem;
+            font-size: 0.875rem;
             font-weight: 600;
-            margin-bottom: 1rem;
-            color: var(--text-primary);
-            border-left: 3px solid var(--accent-color);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.875rem;
+            color: var(--text-secondary);
+            border-left: 2px solid var(--accent-color);
             padding-left: 0.5rem;
         }
 
         .presets-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 0.75rem;
+            gap: 0.5rem;
         }
 
         .preset-btn {
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.02);
             border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 0.75rem;
+            border-radius: 4px;
+            padding: 0.6rem;
             color: var(--text-primary);
             font-family: inherit;
-            font-size: 0.825rem;
+            font-size: 0.775rem;
             font-weight: 500;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.15s ease;
             text-align: left;
+            line-height: 1.3;
         }
 
         .preset-btn:hover {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: var(--accent-color);
-            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.15);
         }
 
         .preset-btn.active {
-            background: rgba(59, 130, 246, 0.15);
+            background: rgba(59, 130, 246, 0.08);
             border-color: var(--accent-color);
-            color: var(--accent-color);
-            box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
         }
 
         .form-group {
-            margin-bottom: 1rem;
+            margin-bottom: 0.75rem;
         }
 
         .form-group label {
             display: block;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             font-weight: 500;
             color: var(--text-secondary);
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.35rem;
         }
 
         .form-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 1rem;
+            gap: 0.75rem;
         }
 
         select, input {
             width: 100%;
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.02);
             border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 0.5rem 0.75rem;
+            border-radius: 4px;
+            padding: 0.45rem 0.6rem;
             color: var(--text-primary);
             font-family: inherit;
-            font-size: 0.875rem;
+            font-size: 0.8rem;
             outline: none;
-            transition: border-color 0.2s;
+            transition: border-color 0.15s;
         }
 
         select:focus, input:focus {
@@ -236,29 +236,31 @@
         .range-slider {
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 0.75rem;
         }
 
         .range-slider input[type="range"] {
             flex-grow: 1;
             accent-color: var(--accent-color);
-            height: 6px;
+            height: 4px;
             padding: 0;
-            background: rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.06);
             border: none;
         }
 
         .range-value {
-            font-size: 0.875rem;
-            font-weight: 600;
-            min-width: 45px;
+            font-family: var(--font-mono);
+            font-size: 0.775rem;
+            font-weight: 500;
+            min-width: 40px;
             text-align: right;
+            color: var(--text-secondary);
         }
 
         .decision-panel {
             display: flex;
             flex-direction: column;
-            gap: 1rem;
+            gap: 0.75rem;
         }
 
         .decision-header {
@@ -266,105 +268,110 @@
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid var(--border-color);
-            padding-bottom: 0.75rem;
+            padding-bottom: 0.6rem;
         }
 
         .status-badge {
-            font-size: 0.825rem;
-            font-weight: 700;
+            font-size: 0.75rem;
+            font-weight: 600;
             text-transform: uppercase;
-            padding: 0.35rem 0.75rem;
-            border-radius: 4px;
+            letter-spacing: 0.05em;
+            padding: 0.25rem 0.6rem;
+            border-radius: 3px;
             border: 1px solid transparent;
         }
 
         .status-badge.risk {
-            background-color: rgba(239, 68, 68, 0.15);
-            border-color: var(--danger-color);
+            background-color: rgba(239, 68, 68, 0.08);
+            border-color: rgba(239, 68, 68, 0.4);
             color: var(--danger-color);
-            box-shadow: 0 0 10px var(--danger-glow);
         }
 
         .status-badge.safe {
-            background-color: rgba(16, 185, 129, 0.15);
-            border-color: var(--safe-color);
+            background-color: rgba(16, 185, 129, 0.08);
+            border-color: rgba(16, 185, 129, 0.4);
             color: var(--safe-color);
-            box-shadow: 0 0 10px var(--safe-glow);
         }
 
         .decision-metric {
-            background: rgba(255, 255, 255, 0.03);
+            background: rgba(255, 255, 255, 0.01);
             border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 0.75rem 1rem;
+            border-radius: 4px;
+            padding: 0.6rem 0.85rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
         .metric-label {
-            font-size: 0.825rem;
+            font-size: 0.775rem;
             color: var(--text-secondary);
         }
 
         .metric-value {
-            font-size: 0.9rem;
+            font-size: 0.825rem;
             font-weight: 600;
         }
 
         .metric-value.highlight {
-            color: var(--accent-color);
+            font-family: var(--font-mono);
+            color: #60a5fa;
         }
 
         .warning-box {
-            background: rgba(245, 158, 11, 0.1);
-            border: 1px solid var(--warning-color);
-            border-radius: 8px;
-            padding: 0.75rem 1rem;
+            background: rgba(245, 158, 11, 0.05);
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            border-radius: 4px;
+            padding: 0.6rem 0.85rem;
             display: flex;
             flex-direction: column;
-            gap: 0.25rem;
-            color: var(--warning-color);
-            box-shadow: 0 0 12px var(--warning-glow);
-            font-size: 0.825rem;
+            gap: 0.2rem;
+            color: #fbbf24;
+            font-size: 0.775rem;
             font-weight: 500;
         }
 
         .warning-title {
-            font-weight: 700;
+            font-weight: 600;
             text-transform: uppercase;
-            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+            font-size: 0.7rem;
         }
 
         .explanations-list {
             list-style: none;
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
+            gap: 0.5rem;
         }
 
         .explanations-list li {
-            font-size: 0.825rem;
-            line-height: 1.4;
+            font-size: 0.8rem;
+            line-height: 1.35;
             color: var(--text-secondary);
-            padding-left: 1.25rem;
+            padding-left: 1rem;
             position: relative;
         }
 
         .explanations-list li::before {
-            content: "-";
+            content: "•";
             position: absolute;
-            left: 0;
+            left: 0.1rem;
             top: 0;
-            color: var(--accent-color);
-            font-weight: 700;
+            color: var(--text-secondary);
+            opacity: 0.5;
         }
 
         .explanations-list .header-item {
+            font-size: 0.775rem;
             font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
             color: var(--text-primary);
             padding-left: 0;
             margin-top: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            padding-bottom: 0.25rem;
         }
 
         .explanations-list .header-item::before {
@@ -374,9 +381,10 @@
         .divider {
             height: 1px;
             background: var(--border-color);
-            margin: 0.5rem 0;
+            margin: 0.4rem 0;
         }
     </style>
+
 </head>
 <body>
     <header>
@@ -915,80 +923,148 @@
             const cy = h / 2;
 
             // Очищаем экран
-            ctx.fillStyle = "#090d16";
+            ctx.fillStyle = "#07090e";
             ctx.fillRect(0, 0, w, h);
 
+            const outerRadius = 2.4 * scale;
+
             // Отрисовка концентрических колец (радарная сетка)
-            ctx.strokeStyle = "rgba(16, 185, 129, 0.15)";
+            ctx.strokeStyle = "rgba(148, 163, 184, 0.06)";
             ctx.lineWidth = 1;
             
-            const rings = [0.5, 1.0, 1.5, 2.0, 2.5];
+            const rings = [0.5, 1.0, 1.5, 2.0, 2.4];
             rings.forEach(r => {
                 ctx.beginPath();
                 ctx.arc(cx, cy, r * scale, 0, 2 * Math.PI);
                 ctx.stroke();
                 
-                // Подписи колец
-                ctx.fillStyle = "rgba(16, 185, 129, 0.4)";
-                ctx.font = "10px sans-serif";
-                ctx.fillText(r + " NM", cx + 5, cy - r * scale + 12);
+                // Подписи колец (кроме внешнего)
+                if (r < 2.4) {
+                    ctx.fillStyle = "rgba(148, 163, 184, 0.3)";
+                    ctx.font = "9px 'SF Mono', monospace";
+                    ctx.textAlign = "left";
+                    ctx.fillText(r.toFixed(1) + " NM", cx + 5, cy - r * scale + 10);
+                }
             });
 
             // Направляющие линии пеленгов
-            ctx.strokeStyle = "rgba(16, 185, 129, 0.1)";
+            ctx.strokeStyle = "rgba(148, 163, 184, 0.03)";
             for (let angle = 0; angle < 360; angle += 30) {
                 const rad = (angle - 90) * Math.PI / 180;
                 ctx.beginPath();
                 ctx.moveTo(cx, cy);
-                ctx.lineTo(cx + Math.cos(rad) * 2.5 * scale, cy + Math.sin(rad) * 2.5 * scale);
+                ctx.lineTo(cx + Math.cos(rad) * outerRadius, cy + Math.sin(rad) * outerRadius);
                 ctx.stroke();
             }
 
-            // Подписи сторон света
-            ctx.fillStyle = "rgba(16, 185, 129, 0.6)";
-            ctx.font = "bold 12px sans-serif";
+            // Отрисовка внешней шкалы пеленгов (Bearing Ring)
+            ctx.strokeStyle = "rgba(148, 163, 184, 0.2)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(cx, cy, outerRadius, 0, 2 * Math.PI);
+            ctx.stroke();
+
+            // Рисуем деления (tick marks) и подписи пеленгов на внешнем кольце
+            ctx.fillStyle = "rgba(148, 163, 184, 0.6)";
+            ctx.font = "9px 'SF Mono', monospace";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
-            ctx.fillText("N", cx, cy - 2.5 * scale - 15);
-            ctx.fillText("S", cx, cy + 2.5 * scale + 15);
-            ctx.fillText("E", cx + 2.5 * scale + 15, cy);
-            ctx.fillText("W", cx - 2.5 * scale - 15, cy);
+
+            for (let angle = 0; angle < 360; angle += 5) {
+                const rad = (angle - 90) * Math.PI / 180;
+                const isMajor = angle % 30 === 0;
+                const isMedium = angle % 10 === 0 && !isMajor;
+                
+                let tickLen = 4;
+                if (isMajor) tickLen = 10;
+                else if (isMedium) tickLen = 7;
+
+                const startX = cx + Math.cos(rad) * outerRadius;
+                const startY = cy + Math.sin(rad) * outerRadius;
+                const endX = cx + Math.cos(rad) * (outerRadius - tickLen);
+                const endY = cy + Math.sin(rad) * (outerRadius - tickLen);
+
+                ctx.strokeStyle = isMajor ? "rgba(148, 163, 184, 0.4)" : "rgba(148, 163, 184, 0.15)";
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+
+                if (isMajor) {
+                    const textAngleStr = String(angle).padStart(3, '0') + "°";
+                    const labelX = cx + Math.cos(rad) * (outerRadius + 14);
+                    const labelY = cy + Math.sin(rad) * (outerRadius + 14);
+                    
+                    // Выделяем стороны света
+                    if (angle === 0) {
+                        ctx.fillStyle = "#ef4444"; // Север красный
+                        ctx.font = "bold 10px sans-serif";
+                        ctx.fillText("N", labelX, labelY);
+                    } else if (angle === 90) {
+                        ctx.fillStyle = "rgba(148, 163, 184, 0.8)";
+                        ctx.font = "bold 10px sans-serif";
+                        ctx.fillText("E", labelX, labelY);
+                    } else if (angle === 180) {
+                        ctx.fillStyle = "rgba(148, 163, 184, 0.8)";
+                        ctx.font = "bold 10px sans-serif";
+                        ctx.fillText("S", labelX, labelY);
+                    } else if (angle === 270) {
+                        ctx.fillStyle = "rgba(148, 163, 184, 0.8)";
+                        ctx.font = "bold 10px sans-serif";
+                        ctx.fillText("W", labelX, labelY);
+                    } else {
+                        ctx.fillStyle = "rgba(148, 163, 184, 0.4)";
+                        ctx.font = "8px 'SF Mono', monospace";
+                        ctx.fillText(textAngleStr, labelX, labelY);
+                    }
+                }
+            }
 
             // ОТРИСОВКА ЗАПРЕЩЕННЫХ СЕКТОРОВ КУРСА
             forbiddenSectors.forEach(sector => {
                 const startDeg = sector[0];
                 const endDeg = sector[1];
 
-                // В МППСС-72 курс идет от 0 (север) по часовой стрелке.
-                // В Canvas радианы идут от оси X (восток) по часовой стрелке.
-                // Переводим: canvas_angle = (course - 90) * PI / 180
                 const startRad = (startDeg - 90) * Math.PI / 180;
                 const endRad = (endDeg - 90) * Math.PI / 180;
 
-                ctx.fillStyle = "rgba(239, 68, 68, 0.22)";
+                ctx.fillStyle = "rgba(239, 68, 68, 0.12)";
                 ctx.beginPath();
                 ctx.moveTo(cx, cy);
-                // Отрисовываем дугу сектора
-                ctx.arc(cx, cy, 2.0 * scale, startRad, endRad);
+                ctx.arc(cx, cy, outerRadius - 10, startRad, endRad);
                 ctx.lineTo(cx, cy);
                 ctx.fill();
+
+                // Отрисовываем дуговую границу красного сектора
+                ctx.strokeStyle = "rgba(239, 68, 68, 0.4)";
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(cx, cy, outerRadius - 10, startRad, endRad);
+                ctx.stroke();
             });
 
             // СОБСТВЕННОЕ СУДНО (Own Ship)
-            // Рисуем в центре
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = "#3b82f6";
-            
-            ctx.fillStyle = "#3b82f6";
-            ctx.beginPath();
-            ctx.arc(cx, cy, 6, 0, 2 * Math.PI);
-            ctx.fill();
-            ctx.shadowBlur = 0; // Сбрасываем тень
-
-            // Направление движения собственного судна
             const ownCourseRad = (ownShipData.course - 90) * Math.PI / 180;
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(ownCourseRad);
+            
+            // Символический силуэт судна (треугольник AIS)
+            ctx.fillStyle = "#3b82f6";
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, -9);  // Нос
+            ctx.lineTo(-5, 6);  // Корма слева
+            ctx.lineTo(5, 6);   // Корма справа
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+
+            // Вектор направления движения собственного судна
             ctx.strokeStyle = "#3b82f6";
-            ctx.lineWidth = 3;
+            ctx.lineWidth = 1.5;
             ctx.beginPath();
             ctx.moveTo(cx, cy);
             ctx.lineTo(cx + Math.cos(ownCourseRad) * 45, cy + Math.sin(ownCourseRad) * 45);
@@ -998,50 +1074,63 @@
             if (recommendedHeading !== null) {
                 const recRad = (recommendedHeading - 90) * Math.PI / 180;
                 ctx.strokeStyle = "#10b981";
-                ctx.lineWidth = 3;
-                ctx.setLineDash([5, 3]); // Пунктирная линия
+                ctx.lineWidth = 2;
+                ctx.setLineDash([4, 3]); // Пунктирная линия
                 ctx.beginPath();
                 ctx.moveTo(cx, cy);
-                ctx.lineTo(cx + Math.cos(recRad) * 80, cy + Math.sin(recRad) * 80);
+                ctx.lineTo(cx + Math.cos(recRad) * (outerRadius - 12), cy + Math.sin(recRad) * (outerRadius - 12));
                 ctx.stroke();
                 ctx.setLineDash([]); // Сброс пунктира
 
-                // Стрелочка на конце нового курса
+                // Индикатор на конце нового курса
                 ctx.fillStyle = "#10b981";
                 ctx.beginPath();
-                ctx.arc(cx + Math.cos(recRad) * 80, cy + Math.sin(recRad) * 80, 5, 0, 2 * Math.PI);
+                ctx.arc(cx + Math.cos(recRad) * (outerRadius - 12), cy + Math.sin(recRad) * (outerRadius - 12), 4, 0, 2 * Math.PI);
                 ctx.fill();
             }
 
             // СУДА-ЦЕЛИ (Target Ships)
             currentTargets.forEach(tgt => {
-                // Координаты X и Y. Восток — вправо (+x), Север — вверх (+y).
-                // В Canvas Y идет вниз, поэтому: canvas_y = cy - y * scale
                 const tx = cx + tgt.x * scale;
                 const ty = cy - tgt.y * scale;
 
-                // Рисуем точку положения судна
+                // Проверяем, не выходит ли цель за пределы шкалы
+                const dist = Math.sqrt((tx - cx) ** 2 + (ty - cy) ** 2);
+                if (dist > outerRadius) return;
+
+                const tgtCourseRad = (tgt.course - 90) * Math.PI / 180;
+
+                ctx.save();
+                ctx.translate(tx, ty);
+                ctx.rotate(tgtCourseRad);
+
+                // Рисуем силуэт цели (оранжевый треугольник)
                 ctx.fillStyle = "#f59e0b";
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+                ctx.lineWidth = 1;
                 ctx.beginPath();
-                ctx.arc(tx, ty, 6, 0, 2 * Math.PI);
+                ctx.moveTo(0, -7);
+                ctx.lineTo(-4, 5);
+                ctx.lineTo(4, 5);
+                ctx.closePath();
                 ctx.fill();
+                ctx.stroke();
+                ctx.restore();
 
                 // Вектор движения цели
-                const tgtCourseRad = (tgt.course - 90) * Math.PI / 180;
                 ctx.strokeStyle = "#f59e0b";
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 1.2;
                 ctx.beginPath();
                 ctx.moveTo(tx, ty);
-                // Длина вектора пропорциональна скорости (например, speed * 2)
-                const vectorLen = Math.max(20, tgt.speed * 2.5);
+                const vectorLen = Math.max(15, tgt.speed * 2.0);
                 ctx.lineTo(tx + Math.cos(tgtCourseRad) * vectorLen, ty + Math.sin(tgtCourseRad) * vectorLen);
                 ctx.stroke();
 
                 // Подпись имени судна
-                ctx.fillStyle = "#9ca3af";
-                ctx.font = "500 11px 'Inter'";
+                ctx.fillStyle = "#94a3b8";
+                ctx.font = "500 10px 'Inter'";
                 ctx.textAlign = "left";
-                ctx.fillText(tgt.name, tx + 10, ty + 2);
+                ctx.fillText(tgt.name, tx + 8, ty + 2);
             });
         }
     </script>
