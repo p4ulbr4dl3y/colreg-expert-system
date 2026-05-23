@@ -3,9 +3,9 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Dict
 
 class VesselType(Enum):
-    POWER_DRIVEN = "POWER_DRIVEN"  # Судно с механическим двигателем
-    SAILING = "SAILING"            # Парусное судно
-    FISHING = "FISHING"            # Судно, занятое ловом рыбы
+    POWER_DRIVEN = "POWER_DRIVEN"  # судно с механическим двигателем
+    SAILING = "SAILING"            # парусное судно
+    FISHING = "FISHING"            # судно, занятое ловом рыбы
     CBD = "CBD"                    # судно, стесненное своей осадкой
     RAM = "RAM"                    # судно, ограниченное в возможности маневрировать
     NUC = "NUC"                    # судно, лишенное возможности управляться
@@ -22,8 +22,8 @@ class VesselType(Enum):
         return descriptions[self]
 
 class Visibility(Enum):
-    GOOD = "GOOD"                  # На виду друг у друга (Хорошая видимость)
-    RESTRICTED = "RESTRICTED"      # Ограниченная видимость
+    GOOD = "GOOD"                  # на виду друг у друга при хорошей видимости
+    RESTRICTED = "RESTRICTED"      # ограниченная видимость
 
 class Action(Enum):
     KEEP_COURSE_SPEED = "KEEP_COURSE_SPEED"
@@ -43,9 +43,9 @@ class Action(Enum):
         return descriptions[self]
 
 class VesselRole(Enum):
-    STAND_ON = "STAND_ON"    # Судно, которому уступают дорогу
-    GIVE_WAY = "GIVE_WAY"    # Судно, обязанное уступить дорогу
-    BOTH_GIVE_WAY = "BOTH"  # Оба судна обязаны предпринять маневр (например, лоб-в-лоб)
+    STAND_ON = "STAND_ON"    # судно, которому уступают дорогу
+    GIVE_WAY = "GIVE_WAY"    # судно, обязанное уступить дорогу
+    BOTH_GIVE_WAY = "BOTH"  # оба судна обязаны предпринять маневр (например, лоб-в-лоб)
     N_A = "N_A"
 
     def description_ru(self) -> str:

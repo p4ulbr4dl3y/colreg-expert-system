@@ -90,32 +90,32 @@ class COLREGInferenceEngine:
             targets_statuses.append(f"опасное сближение: {status_desc}")
             
             # Применяем правила МППСС-72 по отдельности к данной цели
-            tgt_expl = [f"оценка расхождения с судно-целью {tgt.name}:"]
+            tgt_notes = []
             
             # Ограниченная видимость (Правило 19)
             if env.visibility == Visibility.RESTRICTED:
                 is_ahead_of_beam = (rb_own <= 90 or rb_own >= 270)
                 is_we_overtaking = (112.5 <= rb_tgt <= 247.5)
                 
-                tgt_expl.append("  применяется Правило 19 для ограниченной видимости: приоритеты типов судов не действуют;")
+                tgt_notes.append("применяется Правило 19 для ограниченной видимости: приоритеты типов судов не действуют")
                 
                 if is_ahead_of_beam:
                     if not is_we_overtaking:
-                        tgt_expl.append("  цель впереди траверза и не обгоняется: следует избегать изменения курса влево согласно Правилу 19 (d)(i);")
+                        tgt_notes.append("цель впереди траверза и не обгоняется: следует избегать изменения курса влево согласно Правилу 19 (d)(i)")
                         role = VesselRole.BOTH_GIVE_WAY
                         action = Action.ALTER_COURSE_STARBOARD
                     else:
-                        tgt_expl.append("  наше судно обгоняет цель в условиях ограниченной видимости: обязаны уступить дорогу;")
+                        tgt_notes.append("наше судно обгоняет цель в условиях ограниченной видимости: обязаны уступить дорогу")
                         role = VesselRole.GIVE_WAY
                         action = Action.ALTER_COURSE_STARBOARD
                 else:
                     is_target_starboard = (90 < rb_own <= 180)
                     if is_target_starboard:
-                        tgt_expl.append("  цель на траверзе или позади него справа: следует избегать изменения курса вправо в сторону судна согласно Правилу 19 (d)(ii);")
+                        tgt_notes.append("цель на траверзе или позади него справа: следует избегать изменения курса вправо в сторону судна согласно Правилу 19 (d)(ii)")
                         role = VesselRole.BOTH_GIVE_WAY
                         action = Action.ALTER_COURSE_PORT
                     else:
-                        tgt_expl.append("  цель на траверзе или позади него слева: следует избегать изменения курса влево в сторону судна согласно Правилу 19 (d)(ii);")
+                        tgt_notes.append("цель на траверзе или позади него слева: следует избегать изменения курса влево в сторону судна согласно Правилу 19 (d)(ii)")
                         role = VesselRole.BOTH_GIVE_WAY
                         action = Action.ALTER_COURSE_STARBOARD
             
@@ -126,26 +126,18 @@ class COLREGInferenceEngine:
                 # Обгон (Правило 13)
                 if is_overtaking:
                     if encounter_sector == "own_overtaking":
-                        tgt_expl.append("  ситуация обгона согласно Правилу 13: наше судно обгоняет цель и обязано держаться в стороне от ее пути;")
+                        tgt_notes.append("ситуация обгона согласно Правилу 13: наше судно обгоняет цель и обязано держаться в стороне от ее пути")
                         role = VesselRole.GIVE_WAY
                         action = Action.ALTER_COURSE_STARBOARD
                     else:
-                        tgt_expl.append("  ситуация обгона согласно Правилу 13: цель обгоняет наше судно, мы должны сохранять курс и скорость;")
+                        tgt_notes.append("ситуация обгона согласно Правилу 13: цель обгоняет наше судно, мы должны сохранять курс и скорость")
                         role = VesselRole.STAND_ON
                         action = Action.KEEP_COURSE_SPEED
                 
                 # Парусные суда (Правило 12)
                 elif own.vessel_type == VesselType.SAILING and tgt.vessel_type == VesselType.SAILING:
-                    role, action, rule12_expl = evaluate_sailing_vessels_rule12(own, tgt, wind_direction or 0.0)
-                    # Приводим строки правила 12 к строчным буквам и добавляем точку с запятой
-                    for line in rule12_expl:
-                        cleaned_line = line.strip()
-                        if cleaned_line.startswith("-"):
-                            cleaned_line = cleaned_line[1:].strip()
-                        # Делаем первую букву строчной
-                        if cleaned_line:
-                            cleaned_line = cleaned_line[0].lower() + cleaned_line[1:]
-                        tgt_expl.append(f"  {cleaned_line};")
+                    role, action, rule12_notes = evaluate_sailing_vessels_rule12(own, tgt, wind_direction or 0.0)
+                    tgt_notes.extend(rule12_notes)
                 
                 # Взаимные обязанности (Правило 18)
                 else:
@@ -153,43 +145,48 @@ class COLREGInferenceEngine:
                     tgt_rank = get_vessel_priority_rank(tgt.vessel_type)
                     
                     if own_rank != tgt_rank:
-                        tgt_expl.append(f"  взаимные обязанности согласно Правилу 18: наше судно - {own.vessel_type.description_ru()}, цель - {tgt.vessel_type.description_ru()};")
+                        tgt_notes.append(f"взаимные обязанности согласно Правилу 18: наше судно - {own.vessel_type.description_ru()}, цель - {tgt.vessel_type.description_ru()}")
                         if own_rank < tgt_rank:
-                            tgt_expl.append("  наше судно имеет меньший приоритет и обязано уступить дорогу;")
+                            tgt_notes.append("наше судно имеет меньший приоритет и обязано уступить дорогу")
                             role = VesselRole.GIVE_WAY
                             action = Action.ALTER_COURSE_STARBOARD
                         else:
-                            tgt_expl.append("  цель имеет меньший приоритет и обязана уступить дорогу, мы сохраняем курс и скорость;")
+                            tgt_notes.append("цель имеет меньший приоритет и обязана уступить дорогу, мы сохраняем курс и скорость")
                             role = VesselRole.STAND_ON
                             action = Action.KEEP_COURSE_SPEED
                     
                     # Равный приоритет (например, оба механические судна)
                     else:
                         if is_head_on:
-                            tgt_expl.append("  ситуация встречных курсов согласно Правилу 14: оба судна должны изменить курс вправо;")
+                            tgt_notes.append("ситуация встречных курсов согласно Правилу 14: оба судна должны изменить курс вправо")
                             role = VesselRole.BOTH_GIVE_WAY
                             action = Action.ALTER_COURSE_STARBOARD
                         elif is_crossing:
                             if encounter_sector == "crossing_starboard":
-                                tgt_expl.append("  ситуация пересечения курсов согласно Правилу 15: цель находится справа, мы обязаны уступить дорогу;")
+                                tgt_notes.append("ситуация пересечения курсов согласно Правилу 15: цель находится справа, мы обязаны уступить дорогу")
                                 role = VesselRole.GIVE_WAY
                                 action = Action.ALTER_COURSE_STARBOARD
                             else:
-                                tgt_expl.append("  ситуация пересечения курсов согласно Правилу 15: цель находится слева, мы имеем преимущество и сохраняем курс и скорость;")
+                                tgt_notes.append("ситуация пересечения курсов согласно Правилу 15: цель находится слева, мы имеем преимущество и сохраняем курс и скорость")
                                 role = VesselRole.STAND_ON
                                 action = Action.KEEP_COURSE_SPEED
                         else:
-                            tgt_expl.append("  неопределенный сектор равного приоритета: рекомендуется изменить курс вправо в соответствии с хорошей морской практикой;")
+                            tgt_notes.append("неопределенный сектор равного приоритета: рекомендуется изменить курс вправо в соответствии с хорошей морской практикой")
                             role = VesselRole.GIVE_WAY
                             action = Action.ALTER_COURSE_STARBOARD
-
+ 
             # Проверяем маневр крайнего момента для роли Stand-on (Правило 17 b)
             # Если мы Stand-on, но сближение критически близкое (TCPA < 9 минут / 0.15 ч), мы ОБЯЗАНЫ действовать
             if role == VesselRole.STAND_ON and tcpa < 0.15:
-                tgt_expl.append(f"  крайняя необходимость согласно Правилу 17 (b): время сближения {tcpa*60:.1f} минут является критическим, мы обязаны маневрировать для избежания столкновения;")
+                tgt_notes.append(f"крайняя необходимость согласно Правилу 17 (b): время сближения {tcpa*60:.1f} минут является критическим, мы обязаны маневрировать для избежания столкновения")
                 role = VesselRole.GIVE_WAY
                 action = Action.ALTER_COURSE_STARBOARD  # Правило 17 (с) запрещает поворот влево для цели слева
             
+            tgt_expl = [f"оценка расхождения с судном-целью {tgt.name}:"]
+            for i, note in enumerate(tgt_notes):
+                suffix = "." if i == len(tgt_notes) - 1 else ";"
+                tgt_expl.append(f"  - {note}{suffix}")
+                
             target_decisions[tgt.name] = TargetDecision(
                 target_name=tgt.name,
                 collision_risk=True,
