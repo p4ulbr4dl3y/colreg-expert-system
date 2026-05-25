@@ -24,6 +24,7 @@ from .models import (
 )
 from .rules import (
     classify_encounter_sectors,
+    determine_sound_signals,
     evaluate_sailing_vessels_rule12,
     get_vessel_priority_rank,
 )
@@ -323,6 +324,16 @@ class COLREGInferenceEngine:
 
         # 2. Если опасности нет вообще
         if not active_risks:
+            expl = general_explanation + ["Все цели расходятся безопасно."]
+            signals = determine_sound_signals(
+                own, target_decisions, env, Action.N_A, VesselRole.N_A
+            )
+            if signals:
+                expl.append("")
+                expl.append("необходимые звуковые сигналы:")
+                for i, sig in enumerate(signals):
+                    suffix = "." if i == len(signals) - 1 else ";"
+                    expl.append(f"- {sig}{suffix}")
             return Decision(
                 collision_risk=False,
                 own_role=VesselRole.N_A,
@@ -332,7 +343,7 @@ class COLREGInferenceEngine:
                     unified_forbidden_headings
                 ),
                 target_decisions=target_decisions,
-                explanation=general_explanation + ["Все цели расходятся безопасно."],
+                explanation=expl,
             )
 
         # 3. Принятие общего решения на основе объединенных секторов опасных курсов
@@ -347,6 +358,16 @@ class COLREGInferenceEngine:
 
         # Если мы Stand-on для всех и текущий курс безопасен -> просто сохраняем его
         if not own_must_act and not is_current_heading_forbidden:
+            expl = general_explanation + ["Наше судно сохраняет курс и скорость."]
+            signals = determine_sound_signals(
+                own, target_decisions, env, Action.KEEP_COURSE_SPEED, VesselRole.STAND_ON
+            )
+            if signals:
+                expl.append("")
+                expl.append("необходимые звуковые сигналы:")
+                for i, sig in enumerate(signals):
+                    suffix = "." if i == len(signals) - 1 else ";"
+                    expl.append(f"- {sig}{suffix}")
             return Decision(
                 collision_risk=True,
                 own_role=VesselRole.STAND_ON,
@@ -356,8 +377,7 @@ class COLREGInferenceEngine:
                     unified_forbidden_headings
                 ),
                 target_decisions=target_decisions,
-                explanation=general_explanation
-                + ["Наше судно сохраняет курс и скорость."],
+                explanation=expl,
             )
 
         # Иначе мы обязаны изменить курс
@@ -470,9 +490,20 @@ class COLREGInferenceEngine:
             f"объединенные опасные сектора курсов: {', '.join(sectors_desc) if sectors_desc else 'нет'}"
         )
 
+        own_role = VesselRole.GIVE_WAY if own_must_act else VesselRole.STAND_ON
+        signals = determine_sound_signals(
+            own, target_decisions, env, recommended_action, own_role
+        )
+        if signals:
+            explanation.append("")
+            explanation.append("необходимые звуковые сигналы:")
+            for i, sig in enumerate(signals):
+                suffix = "." if i == len(signals) - 1 else ";"
+                explanation.append(f"- {sig}{suffix}")
+
         return Decision(
             collision_risk=True,
-            own_role=VesselRole.GIVE_WAY if own_must_act else VesselRole.STAND_ON,
+            own_role=own_role,
             recommended_action=recommended_action,
             recommended_heading=recommended_heading,
             forbidden_sectors=forbidden_sectors,

@@ -133,3 +133,84 @@ def evaluate_sailing_vessels_rule12(
                 "наше судно находится с подветренной стороны и имеет преимущество, наветренное судно-цель должно уступить дорогу согласно правилу 12 (a)(ii)"
             )
             return VesselRole.STAND_ON, Action.KEEP_COURSE_SPEED, explanation
+
+
+def determine_sound_signals(
+    own: Vessel,
+    target_decisions: dict,
+    env: Environment,
+    recommended_action: Action,
+    own_role: VesselRole,
+) -> List[str]:
+    """
+    Определяет необходимые звуковые сигналы согласно правилам 34 и 35 МППСС-72.
+    """
+    signals = []
+
+    # 1. Ограниченная видимость (правило 35)
+    if env.visibility == Visibility.RESTRICTED:
+        if own.speed < 0.1:
+            if own.vessel_type == VesselType.POWER_DRIVEN:
+                signals.append(
+                    "подача двух продолжительных звуков каждые 2 минуты: судно остановилось и не имеет хода относительно воды"
+                )
+            else:
+                signals.append(
+                    "подача трех последовательных звуков (один продолжительный и два коротких) каждые 2 минуты: судно не имеет хода"
+                )
+        else:
+            if own.vessel_type == VesselType.POWER_DRIVEN:
+                signals.append(
+                    "подача одного продолжительного звука каждые 2 минуты: судно с механическим двигателем имеет ход"
+                )
+            elif own.vessel_type in (
+                VesselType.SAILING,
+                VesselType.FISHING,
+                VesselType.CBD,
+                VesselType.RAM,
+                VesselType.NUC,
+            ):
+                signals.append(
+                    f"подача трех последовательных звуков (один продолжительный и два коротких) каждые 2 минуты: {own.vessel_type.description_ru()} на ходу"
+                )
+
+    # 2. Хорошая видимость (правило 34)
+    else:
+        if own.vessel_type == VesselType.POWER_DRIVEN:
+            if recommended_action == Action.ALTER_COURSE_STARBOARD:
+                signals.append(
+                    "подача одного короткого звука: я изменяю свой курс вправо"
+                )
+            elif recommended_action == Action.ALTER_COURSE_PORT:
+                signals.append(
+                    "подача двух коротких звуков: я изменяю свой курс влево"
+                )
+            elif recommended_action == Action.REDUCE_SPEED_OR_STOP:
+                signals.append(
+                    "подача трех коротких звуков: мои движители работают на задний ход"
+                )
+
+        # Особые случаи: обгон в узкости (правило 34c)
+        if env.in_narrow_channel:
+            for name, dec in target_decisions.items():
+                if dec.collision_risk and dec.encounter_type == "own_overtaking":
+                    signals.append(
+                        f"запрос на обгон судна {name} по правому борту: два продолжительных и один короткий звук"
+                    )
+                    signals.append(
+                        f"запрос на обгон судна {name} по левому борту: два продолжительных и два коротких звука"
+                    )
+                    signals.append(
+                        f"ожидание согласия от {name}: один продолжительный, один короткий, один продолжительный и один короткий звук"
+                    )
+
+        # Сигнал сомнения/предупреждения (правило 34d)
+        if own_role == VesselRole.STAND_ON and any(
+            dec.collision_risk for dec in target_decisions.values()
+        ):
+            signals.append(
+                "сигнал предупреждения при сомнениях в действиях уступающего судна: не менее пяти коротких и частых звуков"
+            )
+
+    return signals
+
