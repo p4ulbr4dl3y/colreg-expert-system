@@ -43,7 +43,7 @@ PRESETS: tuple[DemoPreset, ...] = (
         id="head-on",
         title="Встречные курсы",
         subtitle=(
-            "Два механических судна идут нос к носу. Должно сработать правило 14: "
+            "Два механических судна идут нос к носу. Хорошая видимость. Должно сработать правило 14: "
             "оба судна меняют курс вправо; итоговая рекомендация - поворот вправо."
         ),
         rule_focus="Правило 14",
@@ -55,7 +55,7 @@ PRESETS: tuple[DemoPreset, ...] = (
         id="crossing-starboard",
         title="Цель справа",
         subtitle=(
-            "Пересечение курсов: цель находится по правому борту. Должно сработать "
+            "Пересечение курсов: цель находится по правому борту. Хорошая видимость. Должно сработать "
             "правило 15: наше судно уступает дорогу; итоговая рекомендация - поворот вправо."
         ),
         rule_focus="Правило 15",
@@ -67,7 +67,7 @@ PRESETS: tuple[DemoPreset, ...] = (
         id="overtaking",
         title="Обгон",
         subtitle=(
-            "Наше судно догоняет более медленную цель. Должно сработать правило 13: "
+            "Наше судно догоняет более медленную цель. Хорошая видимость. Должно сработать правило 13: "
             "обгоняющее судно держится в стороне; итоговая рекомендация - поворот вправо."
         ),
         rule_focus="Правило 13",
@@ -79,7 +79,7 @@ PRESETS: tuple[DemoPreset, ...] = (
         id="sailing-priority",
         title="Парусное судно",
         subtitle=(
-            "Механическое судно встречает парусное. Должно сработать правило 18: "
+            "Механическое судно встречает парусное. Хорошая видимость. Должно сработать правило 18: "
             "механическое судно уступает парусному; итоговая рекомендация - поворот вправо."
         ),
         rule_focus="Правило 18",
@@ -103,7 +103,7 @@ PRESETS: tuple[DemoPreset, ...] = (
         id="multi-target",
         title="Две цели",
         subtitle=(
-            "Две цели создают пересекающиеся опасные сектора. Должны сработать правила "
+            "Две цели создают пересекающиеся опасные сектора. Хорошая видимость. Должны сработать правила "
             "пересечения курсов для каждой цели; итоговая рекомендация - общий безопасный курс."
         ),
         rule_focus="Многоцелевой вывод",
@@ -118,7 +118,7 @@ PRESETS: tuple[DemoPreset, ...] = (
         id="turning-limit",
         title="Маневр не успевает",
         subtitle=(
-            "Близкое встречное сближение и большой радиус циркуляции. Должно сработать "
+            "Близкое встречное сближение и большой радиус циркуляции. Хорошая видимость. Должно сработать "
             "правило 14, но проверка маневренности показывает: поворот не успевает завершиться."
         ),
         rule_focus="Ограничение маневренности",
@@ -138,18 +138,18 @@ PRESETS: tuple[DemoPreset, ...] = (
 
 
 ACTION_LABELS = {
-    "KEEP_COURSE_SPEED": "Сохранять курс и скорость",
-    "ALTER_COURSE_STARBOARD": "Поворот вправо",
-    "ALTER_COURSE_PORT": "Поворот влево",
-    "REDUCE_SPEED_OR_STOP": "Снизить ход / остановиться",
-    "N_A": "Маневр не требуется",
+    "KEEP_COURSE_SPEED": "сохранять курс и скорость",
+    "ALTER_COURSE_STARBOARD": "поворот вправо",
+    "ALTER_COURSE_PORT": "поворот влево",
+    "REDUCE_SPEED_OR_STOP": "снизить ход / остановиться",
+    "N_A": "маневр не требуется",
 }
 
 ROLE_LABELS = {
-    "STAND_ON": "Имеем преимущество",
-    "GIVE_WAY": "Уступаем дорогу",
-    "BOTH": "Оба маневрируют",
-    "N_A": "Не применимо",
+    "STAND_ON": "имеем преимущество",
+    "GIVE_WAY": "уступаем дорогу",
+    "BOTH": "оба маневрируют",
+    "N_A": "не применимо",
 }
 
 ENCOUNTER_LABELS = {
@@ -471,7 +471,7 @@ HTML = r"""<!doctype html>
       padding: 12px;
       min-height: 88px;
       display: grid;
-      align-content: center;
+      align-content: start;
       gap: 7px;
       background: #fbfbf8;
     }
@@ -487,9 +487,9 @@ HTML = r"""<!doctype html>
       overflow-wrap: anywhere;
     }
 
-    .metric.risk strong { color: var(--accent-2); }
-    .metric.ok strong { color: var(--accent); }
-    .metric.warn strong { color: var(--amber); }
+    .metric.risk strong { }
+    .metric.ok strong { }
+    .metric.warn strong { }
 
     .targets {
       display: grid;
@@ -546,7 +546,7 @@ HTML = r"""<!doctype html>
     }
 
     .applied-rule strong {
-      color: #0f5f59;
+      color: var(--ink);
       font-size: 14px;
       line-height: 1.35;
     }
@@ -629,7 +629,6 @@ HTML = r"""<!doctype html>
         <div class="panel radar-panel">
           <div class="panel-head">
             <h3>Навигационная обстановка</h3>
-            <span id="env" class="meta"></span>
           </div>
           <div class="radar-wrap">
             <canvas id="radar"></canvas>
@@ -703,7 +702,6 @@ HTML = r"""<!doctype html>
       const decision = preset.decision;
       $("title").textContent = preset.title;
       $("subtitle").textContent = preset.subtitle;
-      $("env").textContent = `Видимость: ${preset.environment.visibility_label}`;
 
       $("risk").textContent = decision.collision_risk ? "есть" : "нет";
       $("riskMetric").className = `metric ${decision.collision_risk ? "risk" : "ok"}`;
@@ -847,7 +845,7 @@ HTML = r"""<!doctype html>
 
       ctx.fillStyle = "#697071";
       ctx.font = "12px system-ui, sans-serif";
-      ctx.fillText("красный сектор: опасные курсы", 14, height - 16);
+
     }
 
     async function init() {

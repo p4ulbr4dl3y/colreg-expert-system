@@ -44,12 +44,12 @@ class TestHeadingBoundaryConditions(unittest.TestCase):
         own = _v("O", 0, 0, 0, 10)
         rad = math.radians(11)
         tgt = _v("T", 1.5 * math.sin(rad), 1.5 * math.cos(rad), 169, 10)
-        # reciprocal courses всё ещё в [170, 190]? 169 — нет. Значит crossing.
+        # reciprocal courses всё ещё в [170, 190]? 169 - нет. Значит crossing.
         d = self.engine.evaluate(own, [tgt], _env())
         self.assertNotEqual(d.target_decisions["T"].encounter_type, "head_on")
 
     def test_target_exactly_350_degrees_from_bow(self):
-        """Цель ровно в 350° от носа (т.е. в 10° слева) — head-on."""
+        """Цель ровно в 350° от носа (т.е. в 10° слева) - head-on."""
         own = _v("O", 0, 0, 0, 10)
         rad = math.radians(350)
         tgt = _v("T", 1.5 * math.sin(rad), 1.5 * math.cos(rad), 180, 10)
@@ -57,15 +57,15 @@ class TestHeadingBoundaryConditions(unittest.TestCase):
         self.assertEqual(d.target_decisions["T"].encounter_type, "head_on")
 
     def test_course_wraparound_359_to_001(self):
-        """Курс 359° vs 1° — почти встречные (разница 2°)."""
+        """Курс 359° vs 1° - почти встречные (разница 2°)."""
         own = _v("O", 0, 0, 359, 10)
         tgt = _v("T", 0, 1.5, 1, 10)
         d = self.engine.evaluate(own, [tgt], _env())
-        # course_diff = 2 — не в [170, 190], значит не head-on
+        # course_diff = 2 - не в [170, 190], значит не head-on
         self.assertNotEqual(d.target_decisions["T"].encounter_type, "head_on")
 
     def test_equal_speeds_not_overtaking(self):
-        """Равные скорости — обгон по правилу 13 не действует."""
+        """Равные скорости - обгон по правилу 13 не действует."""
         own = _v("O", 0, 0, 0, 10)
         tgt = _v("T", 0, 1, 0, 10)  # та же скорость
         d = self.engine.evaluate(own, [tgt], _env())
@@ -96,7 +96,7 @@ class TestWindBoundaryConditions(unittest.TestCase):
         self.assertIn(td.own_role, [VesselRole.GIVE_WAY, VesselRole.STAND_ON])
 
     def test_wind_zero_heading_zero(self):
-        """Ветер = 0°, курс = 0° — попутный ветер; цель близко для риска."""
+        """Ветер = 0°, курс = 0° - попутный ветер; цель близко для риска."""
         own = _v("O", 0, 0, 0, 6, vtype=VesselType.SAILING)
         tgt = _v("T", 0.5, 0.5, 270, 6, vtype=VesselType.SAILING)
         d = self.engine.evaluate(own, [tgt], _env(), wind_direction=0.0)
@@ -108,14 +108,14 @@ class TestWindBoundaryConditions(unittest.TestCase):
 
 
 class TestRule18Subparagraphs(unittest.TestCase):
-    """Подпункты (b), (c), (d) правила 18 — иерархия приоритетов."""
+    """Подпункты (b), (c), (d) правила 18 - иерархия приоритетов."""
 
     def setUp(self):
         self.engine = COLREGInferenceEngine()
 
     def test_rule_18b_sailing_gives_way_to_fishing(self):
         """Правило 18 (b): парусное уступает рыболовному."""
-        # собственное — парусное, цель — рыболовное
+        # собственное - парусное, цель - рыболовное
         own = _v("O", 0, 0, 0, 6, vtype=VesselType.SAILING)
         tgt = _v("T", 1, 1, 270, 5, vtype=VesselType.FISHING)
         d = self.engine.evaluate(own, [tgt], _env(), wind_direction=0.0)
@@ -157,7 +157,7 @@ class TestRule17EdgeCases(unittest.TestCase):
         self.engine = COLREGInferenceEngine()
 
     def test_rule_17_not_triggered_when_tcpa_at_boundary(self):
-        """TCPA ровно 0.15 — правило 17 не должно сработать (граничный)."""
+        """TCPA ровно 0.15 - правило 17 не должно сработать (граничный)."""
         # Этот сценарий сложно сконструировать точно на границе,
         # поэтому проверяем, что в безопасной ситуации правило не сработает
         own = _v("O", 0, 0, 0, 10)
@@ -166,7 +166,7 @@ class TestRule17EdgeCases(unittest.TestCase):
         self.assertNotIn("rule_17_last_resort_action", d.fired_rules)
 
     def test_rule_17_triggers_on_close_stand_on_situation(self):
-        """Очень близкая ситуация пересечения слева — rule 17 срабатывает."""
+        """Очень близкая ситуация пересечения слева - rule 17 срабатывает."""
         own = _v("O", 0, 0, 0, 10)
         tgt = _v("T", -0.3, 0.3, 90, 10)  # близко, TCPA маленький
         d = self.engine.evaluate(own, [tgt], _env())
@@ -184,8 +184,8 @@ class TestRule19EdgeCases(unittest.TestCase):
         own = _v("O", 0, 0, 0, 10)
         tgt = _v("T", 1, 0, 270, 10)  # строго на траверзе
         d = self.engine.evaluate(own, [tgt], _env(Visibility.RESTRICTED))
-        # target_abaft_beam: rb ∈ (90, 270). rb=90 — граница, не входит
-        # target_ahead_of_beam: rb ∈ [0,90] ∪ [270, 360). rb=90 — входит
+        # target_abaft_beam: rb ∈ (90, 270). rb=90 - граница, не входит
+        # target_ahead_of_beam: rb ∈ [0,90] ∪ [270, 360). rb=90 - входит
         # значит rule 19_ahead_* сработает
         ahead_rules = [
             rid for rid in d.fired_rules
@@ -246,11 +246,11 @@ class TestRule12DoubtSubparagraph(unittest.TestCase):
 
     def test_rule_12_aiii_documented_as_gap(self):
         """Этот тест-документация: подпункт 12(a)(iii) не реализован.
-        Когда будет реализован — тест нужно дополнить проверкой поведения."""
+        Когда будет реализован - тест нужно дополнить проверкой поведения."""
         # Текущее поведение: rule 12 срабатывает только если у цели есть
         # sailing_tack. Если цель не парусная, rule 12 не применим.
         # Подпункт 12(a)(iii) говорит: если ЛЕВЫЙ галс и видишь цель с наветра
-        # и НЕ МОЖЕШЬ определить галс цели — уступить. Это требует
+        # и НЕ МОЖЕШЬ определить галс цели - уступить. Это требует
         # дополнительной логики и в текущей KB не покрыто.
         own = _v("O", 0, 0, 0, 6, vtype=VesselType.SAILING)
         tgt = _v("T", 0.5, 0.5, 90, 5, vtype=VesselType.POWER_DRIVEN)  # не парусное

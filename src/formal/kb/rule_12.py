@@ -30,7 +30,7 @@ def rules() -> list[Rule]:
         Rule(
             id="rule_12_different_tack_port_gives_way",
             citation="МППСС-72 правило 12 (a)(i)",
-            description="наш галс левый, цель на правом — уступаем дорогу",
+            description="наш галс левый, цель на правом - уступаем дорогу",
             tag="rule_12",
             precedence=200,
             premises=(
@@ -51,7 +51,7 @@ def rules() -> list[Rule]:
         Rule(
             id="rule_12_different_tack_starboard_stand_on",
             citation="МППСС-72 правило 12 (a)(i)",
-            description="наш галс правый, цель на левом — сохраняем курс и скорость",
+            description="наш галс правый, цель на левом - сохраняем курс и скорость",
             tag="rule_12",
             precedence=200,
             premises=(
@@ -72,7 +72,7 @@ def rules() -> list[Rule]:
         Rule(
             id="rule_12_same_tack_windward_gives_way",
             citation="МППСС-72 правило 12 (a)(ii)",
-            description="мы наветреннее цели на тех же галсах — уступаем дорогу",
+            description="мы наветреннее цели на тех же галсах - уступаем дорогу",
             tag="rule_12",
             precedence=200,
             premises=(
@@ -95,7 +95,7 @@ def rules() -> list[Rule]:
         Rule(
             id="rule_12_same_tack_leeward_stand_on",
             citation="МППСС-72 правило 12 (a)(ii)",
-            description="мы подветреннее цели на тех же галсах — сохраняем курс и скорость",
+            description="мы подветреннее цели на тех же галсах - сохраняем курс и скорость",
             tag="rule_12",
             precedence=200,
             premises=(

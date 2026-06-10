@@ -19,7 +19,7 @@ def rules() -> list[Rule]:
         Rule(
             id="rule_19_ahead_not_overtaking",
             citation="МППСС-72 правило 19 (d)(i)",
-            description="цель впереди траверза, не обгон — избегаем поворота влево",
+            description="цель впереди траверза, не обгон - избегаем поворота влево",
             tag="rule_19",
             precedence=90,
             premises=(
@@ -41,7 +41,7 @@ def rules() -> list[Rule]:
         Rule(
             id="rule_19_ahead_overtaking",
             citation="МППСС-72 правило 19 (d)(i)",
-            description="цель впереди, мы её обгоняем — уступаем ей",
+            description="цель впереди, мы её обгоняем - уступаем ей",
             tag="rule_19",
             precedence=85,
             premises=(
@@ -63,7 +63,7 @@ def rules() -> list[Rule]:
         Rule(
             id="rule_19_abaft_starboard",
             citation="МППСС-72 правило 19 (d)(ii)",
-            description="цель позади траверза справа — избегаем поворота вправо в её сторону",
+            description="цель позади траверза справа - избегаем поворота вправо в её сторону",
             tag="rule_19",
             precedence=85,
             premises=(
@@ -86,7 +86,7 @@ def rules() -> list[Rule]:
         Rule(
             id="rule_19_abaft_port",
             citation="МППСС-72 правило 19 (d)(ii)",
-            description="цель позади траверза слева — избегаем поворота влево в её сторону",
+            description="цель позади траверза слева - избегаем поворота влево в её сторону",
             tag="rule_19",
             precedence=85,
             premises=(
