@@ -303,6 +303,62 @@
             gap: 0.5rem;
         }
 
+        .trace-summary {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-left: 8px;
+            font-weight: normal;
+        }
+
+        .trace-details {
+            margin-top: 8px;
+        }
+
+        .trace-details summary {
+            cursor: pointer;
+            color: #1d4ed8;
+            font-size: 0.9rem;
+            user-select: none;
+        }
+
+        .trace-list {
+            list-style: none;
+            padding: 0;
+            margin: 8px 0 0 0;
+            max-height: 320px;
+            overflow-y: auto;
+            font-size: 0.8rem;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .trace-list li {
+            padding: 6px 10px;
+            border-left: 3px solid #93c5fd;
+            background: #f8fafc;
+            color: #1e293b;
+        }
+
+        .trace-list .trace-citation {
+            color: #1d4ed8;
+            font-weight: 600;
+            display: block;
+        }
+
+        .trace-list .trace-desc {
+            display: block;
+            color: #475569;
+        }
+
+        .trace-list .trace-subst {
+            display: block;
+            color: #64748b;
+            font-family: ui-monospace, monospace;
+            font-size: 0.75rem;
+            margin-top: 2px;
+        }
+
         .explanations-list li {
             font-size: 0.8rem;
             line-height: 1.35;
@@ -471,6 +527,18 @@
                 <ul id="explanationsList" class="explanations-list">
                     <li class="header-item">Ожидание данных от экспертного узла...</li>
                 </ul>
+            </div>
+
+            <!-- Трассировка вывода (формальный движок) -->
+            <div class="card">
+                <div class="card-title">
+                    Правила МППСС-72, которые сработали
+                    <span id="traceSummary" class="trace-summary"></span>
+                </div>
+                <details id="traceDetails" class="trace-details">
+                    <summary>развернуть трассировку</summary>
+                    <ul id="traceList" class="trace-list"></ul>
+                </details>
             </div>
         </div>
     </main>
@@ -847,6 +915,46 @@
                 li.className = "header-item";
                 li.textContent = "Нет подробного вывода.";
                 explanationsList.appendChild(li);
+            }
+
+            // Трассировка вывода формального движка
+            const traceList = document.getElementById("traceList");
+            const traceSummary = document.getElementById("traceSummary");
+            const traceDetails = document.getElementById("traceDetails");
+            traceList.innerHTML = "";
+            const trace = payload.trace;
+            const firedRules = payload.fired_rules || [];
+            const uniqueRules = Array.from(new Set(firedRules));
+            traceSummary.textContent = trace
+                ? `${trace.fired_count} срабатываний · ${uniqueRules.length} уникальных правил · ${trace.iterations} итераций`
+                : `${uniqueRules.length} правил сработало`;
+            if (trace && trace.steps && trace.steps.length > 0) {
+                // фильтруем служебные helper-правила, показываем только значимые
+                const significant = trace.steps.filter(
+                    s => !s.rule_id.startsWith("helper_")
+                );
+                significant.forEach(step => {
+                    const li = document.createElement("li");
+                    const cit = document.createElement("span");
+                    cit.className = "trace-citation";
+                    cit.textContent = `[${step.rule_id}] ${step.citation}`;
+                    const desc = document.createElement("span");
+                    desc.className = "trace-desc";
+                    desc.textContent = step.description;
+                    li.appendChild(cit);
+                    li.appendChild(desc);
+                    if (step.substitution && Object.keys(step.substitution).length > 0) {
+                        const sub = document.createElement("span");
+                        sub.className = "trace-subst";
+                        sub.textContent = "подстановка: " + JSON.stringify(step.substitution);
+                        li.appendChild(sub);
+                    }
+                    traceList.appendChild(li);
+                });
+            } else {
+                const li = document.createElement("li");
+                li.textContent = "Нет сработавших правил.";
+                traceList.appendChild(li);
             }
 
             // Обновляем визуализацию радара

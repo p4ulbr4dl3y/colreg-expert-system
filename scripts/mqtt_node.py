@@ -128,6 +128,7 @@ class ExpertNode:
                     "cpa": tgt_dec.cpa,
                     "tcpa": tgt_dec.tcpa,
                     "explanation": tgt_dec.explanation,
+                    "fired_rules": tgt_dec.fired_rules,
                 }
 
             response = {
@@ -141,6 +142,8 @@ class ExpertNode:
                 "maneuver_possible": decision.maneuver_possible,
                 "target_decisions": target_decisions_serializable,
                 "explanation": decision.explanation,
+                "fired_rules": decision.fired_rules,
+                "trace": decision.trace.to_dict(),
             }
 
             self.client.publish(MQTT_TOPIC_RESULT, json.dumps(response))

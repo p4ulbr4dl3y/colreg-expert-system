@@ -92,6 +92,54 @@ class TargetDecision:
     cpa: float
     tcpa: float
     explanation: List[str]
+    fired_rules: List[str] = field(default_factory=list)
+
+
+@dataclass
+class ProofStep:
+    """Один шаг логического вывода: какое правило сработало с какой подстановкой."""
+
+    rule_id: str
+    citation: str
+    description: str
+    premises_resolved: tuple
+    conclusions_resolved: tuple
+    substitution: tuple
+
+    def to_dict(self) -> dict:
+        return {
+            "rule_id": self.rule_id,
+            "citation": self.citation,
+            "description": self.description,
+            "premises": [
+                {"predicate": name, "args": list(args)}
+                for name, args in self.premises_resolved
+            ],
+            "conclusions": [
+                {"predicate": name, "args": list(args)}
+                for name, args in self.conclusions_resolved
+            ],
+            "substitution": dict(self.substitution),
+        }
+
+
+@dataclass
+class InferenceTrace:
+    """Полная трассировка вывода экспертной системы."""
+
+    steps: List[ProofStep] = field(default_factory=list)
+    iterations: int = 0
+    fired_count: int = 0
+
+    def to_dict(self) -> dict:
+        return {
+            "iterations": self.iterations,
+            "fired_count": self.fired_count,
+            "steps": [s.to_dict() for s in self.steps],
+        }
+
+    def fired_rule_ids(self) -> List[str]:
+        return [s.rule_id for s in self.steps]
 
 
 @dataclass
@@ -106,3 +154,5 @@ class Decision:
     target_decisions: Dict[str, TargetDecision] = field(default_factory=dict)
     maneuver_possible: bool = True
     explanation: List[str] = field(default_factory=list)
+    trace: InferenceTrace = field(default_factory=InferenceTrace)
+    fired_rules: List[str] = field(default_factory=list)
